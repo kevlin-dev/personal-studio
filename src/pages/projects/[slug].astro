@@ -1,0 +1,28 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const allProjects = await getCollection('projects');
+  return allProjects.map((entry) => ({
+    params: { slug: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+---
+
+<Layout title={`${entry.data.title} — Kevin Lin`} description={entry.data.description}>
+  <article>
+    <header>
+      <h1>{entry.data.title}</h1>
+      <p>{entry.data.description}</p>
+      <span aria-label="Status">{entry.data.status}</span>
+      {entry.data.live && <a href={entry.data.live} target="_blank" rel="noopener noreferrer">View live</a>}
+      {entry.data.repo && <a href={entry.data.repo} target="_blank" rel="noopener noreferrer">View source</a>}
+    </header>
+    <Content />
+  </article>
+</Layout>

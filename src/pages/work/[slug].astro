@@ -1,0 +1,30 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const allWork = await getCollection('work', ({ data }) => !data.nda);
+  return allWork.map((entry) => ({
+    params: { slug: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+---
+
+<Layout title={`${entry.data.title} — Kevin Lin`} description={entry.data.description}>
+  <article>
+    <header>
+      <h1>{entry.data.title}</h1>
+      <p>{entry.data.description}</p>
+      {entry.data.tags.length > 0 && (
+        <ul role="list" aria-label="Tags">
+          {entry.data.tags.map((tag) => <li>{tag}</li>)}
+        </ul>
+      )}
+    </header>
+    <Content />
+  </article>
+</Layout>

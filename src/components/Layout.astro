@@ -1,0 +1,65 @@
+---
+import Nav from './Nav.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Kevin Lin — Creative Technologist' } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://kevinlin.studio');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Person",
+          "@id": "https://kevinlin.studio/#person",
+          "name": "Kevin Lin",
+          "jobTitle": "Creative Technologist",
+          "url": "https://kevinlin.studio"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://kevinlin.studio/#website",
+          "url": "https://kevinlin.studio",
+          "name": "Kevin Lin Studio",
+          "publisher": { "@id": "https://kevinlin.studio/#person" }
+        }
+      ]
+    })} />
+
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body>
+    <Nav />
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>

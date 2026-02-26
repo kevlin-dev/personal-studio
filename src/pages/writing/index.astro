@@ -1,0 +1,26 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getCollection } from 'astro:content';
+
+const allWriting = await getCollection('writing', ({ data }) => !data.draft);
+const sorted = allWriting.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<Layout title="Writing — Kevin Lin" description="Essays, build logs, and ideas in progress.">
+  <section>
+    <h1>Writing</h1>
+    <ul role="list">
+      {sorted.map((item) => (
+        <li>
+          <a href={`/writing/${item.slug}`}>
+            <h2>{item.data.title}</h2>
+            <p>{item.data.description}</p>
+            <time datetime={item.data.date.toISOString()}>
+              {item.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </time>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Layout>
