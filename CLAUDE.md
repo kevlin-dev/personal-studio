@@ -1,5 +1,22 @@
 # Personal Studio — Claude Code Instructions
 
+> **⚠️ DEPRECATED FOLDER (flagged 2026-04-24)**
+> The active Personal Studio site has moved to **`~/projects/personal-studio-next/`** (Next.js + Marco design system). This folder (`~/projects/personal-studio/`) is the original Astro scaffold and is no longer the active site.
+>
+> **If a session opened here by accident:** close, reopen at `~/projects/personal-studio-next/`. Load that folder's `CLAUDE.md` (symlinked to `AGENTS.md`).
+>
+> **Untriaged strategy docs in this folder** (decide whether to migrate to -next, archive, or delete): `BACKLOG.md`, `COPY-SKELETON.md`, `DESIGN-BRIEF.md`, `GRIDS-REFERENCE.md`, `MASTER-CONTINUATION.md`, `OS-CONCEPT.md`. Do this triage when rested.
+>
+> Original Astro project instructions retained below for reference.
+
+---
+
+## ALWAYS LOAD FIRST (every session, no exceptions)
+```
+~/projects/personal-studio/MASTER-CONTINUATION.md
+```
+This is the persistent co-founder memory for this project. It contains the full arc history, what's decided, what's open, current state of all parallel tracks, and the decision gate for the next session. Read it before doing anything else.
+
 ## Stack
 - **Framework:** Astro (static site generator)
 - **Styling:** Tailwind CSS v4 (via `@tailwindcss/vite`, imported in `src/styles/global.css`)

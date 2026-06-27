@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09b — Personal Navigation (Sans)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F2F2F2;
+    color: #1A1A1A;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 240px;
+    background: rgba(242,242,242,0.92);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 28px 28px;
+    z-index: 20; display: flex; flex-direction: column;
+  }
+  #sidebar h1 {
+    font-size: 18px; font-weight: 500; letter-spacing: -0.01em;
+    margin-bottom: 32px; color: #1A1A1A;
+  }
+  #sidebar h1 span {
+    display: block; font-size: 11px; font-weight: 400;
+    color: #999; letter-spacing: 0.02em; margin-top: 4px;
+  }
+  #sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+  #sidebar nav a {
+    display: block; padding: 8px 10px; text-decoration: none;
+    color: #999; font-size: 14px; border-radius: 5px;
+    transition: color 0.15s, background 0.15s; cursor: pointer;
+  }
+  #sidebar nav a:hover { color: #fff; background: #1A1A1A; }
+  #sidebar nav a.active { color: #3A3A3A; }
+  #sidebar .footer {
+    margin-top: auto; font-size: 11px; color: #CCC; line-height: 1.6;
+  }
+
+  #detail {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 320px;
+    background: rgba(255,255,255,0.96); backdrop-filter: blur(16px);
+    border-left: 1px solid rgba(0,0,0,0.06); padding: 48px 32px;
+    z-index: 20; transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); overflow-y: auto;
+  }
+  #detail.open { transform: translateX(0); }
+  #detail h2 { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 6px; color: #1A1A1A; }
+  #detail .meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 20px; }
+  #detail .claim { font-size: 15px; line-height: 1.65; color: #3A3A3A; margin-bottom: 24px; }
+  #detail .connections { font-size: 12px; color: #888; line-height: 1.8; }
+  #detail .connections span {
+    display: inline-block; padding: 3px 10px; background: rgba(0,0,0,0.04);
+    border-radius: 4px; margin: 2px 4px 2px 0; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #detail .connections span:hover { background: rgba(0,0,0,0.1); color: #1A1A1A; }
+  #detail .close-btn {
+    position: absolute; top: 20px; right: 20px; width: 28px; height: 28px;
+    border: none; background: rgba(0,0,0,0.04); border-radius: 50%; cursor: pointer;
+    font-size: 14px; color: #888; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  #detail .close-btn:hover { background: rgba(0,0,0,0.08); }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Kevin Lin <span>Creative Technologist</span></h1>
+  <nav>
+    <a href="#" id="nav-explore" class="active" onclick="exitDrill(); return false;">Explore</a>
+    <a href="#">Work</a>
+    <a href="#">Writing</a>
+    <a href="#">About</a>
+    <a href="#">Contact</a>
+  </nav>
+  <div class="footer">A living knowledge system.</div>
+</div>
+
+<div id="detail">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <h2 id="d-title"></h2>
+  <div class="meta" id="d-meta"></div>
+  <div class="claim" id="d-claim"></div>
+  <div class="connections" id="d-conn"></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<!-- Physics tuning panel -->
+<div id="controls" style="
+  position:fixed; bottom:24px; right:24px; z-index:50;
+  background:rgba(255,255,255,0.94); backdrop-filter:blur(12px);
+  border:1px solid rgba(0,0,0,0.08); border-radius:10px;
+  padding:16px 20px; width:220px;
+  font-family:-apple-system,sans-serif; font-size:11px; color:#666;
+">
+  <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#AAA;margin-bottom:12px;">Feel</div>
+
+  <div style="font-size:10px;color:#BBB;margin-bottom:4px;">Nodes — how far from Kevin</div>
+  <input type="range" min="100" max="380" value="260" oninput="PHYSICS.orbitRadius=+this.value" style="width:100%;margin:0 0 12px">
+
+  <div style="font-size:10px;color:#BBB;margin-bottom:4px;">Nodes — snappier ←→ floatier</div>
+  <input type="range" min="1" max="80" value="10" oninput="PHYSICS.orbitSnap=+this.value/1000" style="width:100%;margin:0 0 12px">
+
+  <div style="font-size:10px;color:#BBB;margin-bottom:4px;">Nodes — tighter spacing ←→ spread out</div>
+  <input type="range" min="100" max="3000" value="900" oninput="PHYSICS.repulsion=+this.value" style="width:100%;margin:0 0 12px">
+
+  <div style="font-size:10px;color:#BBB;margin-bottom:4px;">Nodes — stops quickly ←→ floats longer</div>
+  <input type="range" min="30" max="99" value="60" oninput="PHYSICS.nodeDamping=+this.value/100" style="width:100%;margin:0 0 12px">
+
+  <div style="font-size:10px;color:#BBB;margin-bottom:4px;">Kevin — settle speed</div>
+  <input type="range" min="30" max="99" value="60" oninput="PHYSICS.kevinFloat=+this.value/100" style="width:100%;margin:0 0 0">
+</div>
+
+<script src="atoms-data.js"></script>
+<script>
+(function() {
+  var canvas  = document.getElementById('canvas');
+  var ctx     = canvas.getContext('2d');
+  var detail  = document.getElementById('detail');
+  var W, H, dpr;
+  var sidebarW = 240;
+
+  // Interaction state
+  var hoveredNode  = null;
+  var selectedNode = null;
+  var dragNode     = null;   // whichever node (kevin or content) is being dragged
+  var isDraggingKevin = false;
+  var mouseDownX, mouseDownY;
+  var didDrag = false;
+  var mouseX = 0, mouseY = 0;  // current mouse position for spring drag
+
+  // Drill state
+  var drillMode   = false;
+  var drillTarget = null;
+
+  // Opacity animation
+  var kevinOpacity = 1;
+  var kevinTargetOpacity = 1;
+
+  // ── Data ─────────────────────────────────────────────
+  var surfaceNodes = [
+    { id: "design",       label: "Design",         shape: "circle",   desc: "20 years across industrial, software, VR, and AI",            atoms: [56,57,58,109,110] },
+    { id: "faith",        label: "Faith",           shape: "triangle", desc: "The foundation everything rests on",                         atoms: [35,36,37,38,39,40,41,42,43,44,45,46,47,48,101,102,103] },
+    { id: "intelligence", label: "Intelligence",    shape: "diamond",  desc: "Human-AI collaboration as a new dimension",                  atoms: [7,8,9,10,11,12,13,14,15,16] },
+    { id: "formation",    label: "Formation",       shape: "pentagon", desc: "How people grow — not what they know, but what they become", atoms: [49,50,51,52,53,54,55,59,60,61] },
+    { id: "storytelling", label: "Storytelling",    shape: "hexagon",  desc: "Narrative as the structure of meaning",                     atoms: [26,27,28,29,30,31,32,107,108] },
+    { id: "identity",     label: "Identity",        shape: "square",   desc: "Who you are shapes what you build",                         atoms: [33,34,35,62,63,64,65,66] },
+    { id: "knowledge",    label: "Knowledge",       shape: "circle",   desc: "Systems for capturing and compounding what you learn",       atoms: [1,2,3,4,5,6,67,68,69,70] },
+    { id: "perception",   label: "Perception",      shape: "triangle", desc: "How we see determines what we see",                         atoms: [56,57,58,109] },
+    { id: "building",     label: "Building",        shape: "diamond",  desc: "The act of making as a way of knowing",                     atoms: [17,18,19,20,21,22,23,24,25] },
+    { id: "scripture",    label: "Scripture",       shape: "hexagon",  desc: "Living words that read the reader",                         atoms: [38,39,40,41,42,43,44,45,46,47,48,101,102,103] },
+    { id: "fatherhood",   label: "Fatherhood",      shape: "square",   desc: "A new dimension arriving September 2026",                   atoms: [] },
+    { id: "paradigm",     label: "Paradigm Shifts", shape: "pentagon", desc: "The walls that dissolve only through encounter",            atoms: [49,50,71,72,73] },
+  ];
+
+  var surfaceEdges = [
+    { s: "design",       t: "perception" },
+    { s: "design",       t: "building" },
+    { s: "faith",        t: "scripture" },
+    { s: "faith",        t: "formation" },
+    { s: "faith",        t: "identity" },
+    { s: "intelligence", t: "building" },
+    { s: "intelligence", t: "knowledge" },
+    { s: "formation",    t: "identity" },
+    { s: "formation",    t: "paradigm" },
+    { s: "storytelling", t: "identity" },
+    { s: "storytelling", t: "perception" },
+    { s: "knowledge",    t: "formation" },
+    { s: "perception",   t: "paradigm" },
+    { s: "building",     t: "paradigm" },
+    { s: "fatherhood",   t: "formation" },
+    { s: "fatherhood",   t: "faith" },
+    { s: "scripture",    t: "formation" },
+  ];
+
+  var adj = {};
+  surfaceNodes.forEach(function(n) { adj[n.id] = {}; });
+  surfaceEdges.forEach(function(e) {
+    adj[e.s][e.t] = true;
+    adj[e.t][e.s] = true;
+  });
+
+  // ── Kevin node — the parent anchor ───────────────────
+  var kevin = { x: 0, y: 0, vx: 0, vy: 0, size: 18 };
+
+  // ── Tuneable physics constants ────────────────────────
+  // Adjust these sliders in the panel (bottom-right) to feel out the physics
+  var PHYSICS = {
+    orbitRadius:  260,  // orbit distance (Nitin uses 300 — adjusted for our canvas)
+    orbitSnap:    0.01, // spring strength — weak pull, nodes drift back gently
+    repulsion:    900,  // node spacing
+    nodeDamping:  0.60, // velocity decays fast — snappy stops, not floaty
+    kevinFloat:   0.60, // same snappy feel for Kevin
+  };
+
+  // ── Content nodes ─────────────────────────────────────
+  var nodes = [];
+  var nodeById = {};
+  var TARGET_RADIUS = 0; // set in setup
+
+  function initNodes() {
+    nodes = []; nodeById = {};
+    var cx = sidebarW + (W - sidebarW) / 2;
+    var cy = H / 2;
+    TARGET_RADIUS = Math.min(W - sidebarW, H) * 0.30;
+    TARGET_RADIUS = Math.max(TARGET_RADIUS, 180);
+
+    kevin.x = cx; kevin.y = cy; kevin.vx = 0; kevin.vy = 0;
+    kevinHomeX = cx; kevinHomeY = cy;
+
+    surfaceNodes.forEach(function(sn, i) {
+      // Organic positioning: random angle + random radius in a range
+      // Physics will settle them into a natural arrangement
+      var angle = Math.random() * Math.PI * 2;
+      var radiusMin = TARGET_RADIUS * 0.6;
+      var radiusMax = TARGET_RADIUS * 1.3;
+      var radius = radiusMin + Math.random() * (radiusMax - radiusMin);
+      var n = {
+        id: sn.id, label: sn.label, shape: sn.shape, desc: sn.desc, atoms: sn.atoms,
+        size: 16,
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        vx: 0, vy: 0,
+        opacity: 1, targetOpacity: 1,
+        visScale: 1, targetVisScale: 1,
+      };
+      nodes.push(n);
+      nodeById[sn.id] = n;
+    });
+  }
+
+  function setup() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (nodes.length === 0) initNodes();
+  }
+  setup();
+  window.addEventListener("resize", function() { setup(); });
+
+  // ── Physics ───────────────────────────────────────────
+  function simulate() {
+    var i, j, n, other, dx, dy, d, force;
+
+    // Kevin — no home spring. Forces come from reciprocal springs below.
+    if (!isDraggingKevin) {
+      kevin.vx *= PHYSICS.kevinFloat;
+      kevin.vy *= PHYSICS.kevinFloat;
+      kevin.x += kevin.vx;
+      kevin.y += kevin.vy;
+
+      // Soft bounds clamp
+      var margin = 80;
+      kevin.x = Math.max(sidebarW + margin, Math.min(W - margin, kevin.x));
+      kevin.y = Math.max(margin, Math.min(H - margin, kevin.y));
+    }
+
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      if (n === dragNode) {
+        n.x = mouseX; n.y = mouseY;
+        n.vx = 0; n.vy = 0;
+        continue;
+      }
+
+      // ── Spring tether to Kevin at orbit radius (reciprocal) ──
+      dx = n.x - kevin.x;
+      dy = n.y - kevin.y;
+      d  = Math.sqrt(dx * dx + dy * dy) || 1;
+      var radialForce = (d - PHYSICS.orbitRadius) * PHYSICS.orbitSnap;
+      n.vx -= (dx / d) * radialForce;
+      n.vy -= (dy / d) * radialForce;
+      // Reciprocal — Kevin gets pulled toward content nodes
+      if (!isDraggingKevin) {
+        kevin.vx += (dx / d) * radialForce;
+        kevin.vy += (dy / d) * radialForce;
+      }
+
+      // ── Node-node repulsion ──
+      for (j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        other = nodes[j];
+        dx = n.x - other.x;
+        dy = n.y - other.y;
+        d  = Math.sqrt(dx * dx + dy * dy) || 1;
+        if (d > 260) continue;
+        force = PHYSICS.repulsion / (d * d);
+        n.vx += (dx / d) * force;
+        n.vy += (dy / d) * force;
+      }
+
+      // ── Boundary walls — push nodes back into viewport ──
+      if (n.x < sidebarW + 40) n.vx += (sidebarW + 40 - n.x) * 0.4;
+      if (n.x > W - 40)        n.vx += (W - 40 - n.x) * 0.4;
+      if (n.y < 40)            n.vy += (40 - n.y) * 0.4;
+      if (n.y > H - 40)        n.vy += (H - 40 - n.y) * 0.4;
+
+      // ── Tiny ambient drift (barely perceptible) ──
+      var t = Date.now() * 0.00028;
+      n.vx += Math.sin(t + i * 2.3) * 0.0008;
+      n.vy += Math.cos(t * 0.75 + i * 1.8) * 0.0008;
+
+      // ── Damping ──
+      n.vx *= PHYSICS.nodeDamping;
+      n.vy *= PHYSICS.nodeDamping;
+
+      n.x += n.vx;
+      n.y += n.vy;
+    }
+
+    // Animate Kevin opacity
+    kevinOpacity += (kevinTargetOpacity - kevinOpacity) * 0.07;
+
+    // Animate node opacity + visual scale
+    nodes.forEach(function(n) {
+      n.opacity  += (n.targetOpacity  - n.opacity)  * 0.07;
+      n.visScale += (n.targetVisScale - n.visScale)  * 0.07;
+    });
+  }
+
+  // ── Draw helpers ──────────────────────────────────────
+  function drawShape(x, y, size, shape, fill, stroke, lineW) {
+    ctx.beginPath();
+    switch (shape) {
+      case "circle":
+        ctx.arc(x, y, size, 0, Math.PI * 2); break;
+      case "triangle":
+        ctx.moveTo(x, y - size * 1.1);
+        ctx.lineTo(x + size, y + size * 0.7);
+        ctx.lineTo(x - size, y + size * 0.7);
+        ctx.closePath(); break;
+      case "square":
+        var h = size * 0.85;
+        ctx.rect(x - h, y - h, h * 2, h * 2); break;
+      case "diamond":
+        ctx.moveTo(x, y - size * 1.15);
+        ctx.lineTo(x + size * 0.85, y);
+        ctx.lineTo(x, y + size * 1.15);
+        ctx.lineTo(x - size * 0.85, y);
+        ctx.closePath(); break;
+      case "pentagon":
+        for (var i = 0; i < 5; i++) {
+          var a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          ctx.lineTo(x + Math.cos(a) * size, y + Math.sin(a) * size);
+        }
+        ctx.closePath(); break;
+      case "hexagon":
+        for (var i = 0; i < 6; i++) {
+          var a = (i / 6) * Math.PI * 2;
+          ctx.lineTo(x + Math.cos(a) * size, y + Math.sin(a) * size);
+        }
+        ctx.closePath(); break;
+    }
+    if (fill)   { ctx.fillStyle = fill;   ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineW || 1; ctx.stroke(); }
+  }
+
+  function hitTest(mx, my, nx, ny, radius) {
+    var dx = mx - nx, dy = my - ny;
+    return Math.sqrt(dx * dx + dy * dy) < radius;
+  }
+
+  // ── Render loop ───────────────────────────────────────
+  function draw() {
+    simulate();
+    ctx.clearRect(0, 0, W, H);
+    var time = Date.now();
+
+    // Set opacity targets based on state
+    if (drillMode) {
+      kevinTargetOpacity = 0;
+      nodes.forEach(function(n) {
+        var isTarget = n.id === drillTarget;
+        var isConn   = adj[drillTarget] && adj[drillTarget][n.id];
+        if (isTarget || isConn) {
+          n.targetOpacity  = 1;
+          n.targetVisScale = 1;
+        } else {
+          n.targetOpacity  = 0;
+          n.targetVisScale = 0.5; // recede on Z-axis
+        }
+      });
+    } else if (hoveredNode) {
+      kevinTargetOpacity = 0.2;
+      nodes.forEach(function(n) {
+        var isHov  = n === hoveredNode;
+        var isConn = adj[hoveredNode.id] && adj[hoveredNode.id][n.id];
+        n.targetOpacity  = (isHov || isConn) ? 1 : 0.08;
+        n.targetVisScale = 1;
+      });
+    } else {
+      kevinTargetOpacity = 1;
+      nodes.forEach(function(n) {
+        n.targetOpacity  = 1;
+        n.targetVisScale = 1;
+      });
+    }
+
+    // ── Kevin → node spoke edges ──
+    var kevinBreath = kevin.size + Math.sin(time * 0.0007) * 2;
+
+    nodes.forEach(function(n) {
+      var eOp = Math.min(n.opacity, kevinOpacity);
+      if (eOp < 0.02) return;
+      var isHovEdge = n === hoveredNode;
+
+      var dx = n.x - kevin.x, dy = n.y - kevin.y;
+      var d  = Math.sqrt(dx * dx + dy * dy); if (d < 1) return;
+      var ux = dx / d, uy = dy / d;
+
+      ctx.beginPath();
+      ctx.moveTo(kevin.x + ux * (kevinBreath + 2), kevin.y + uy * (kevinBreath + 2));
+      ctx.lineTo(n.x    - ux * (n.size * n.visScale + 2), n.y - uy * (n.size * n.visScale + 2));
+      ctx.strokeStyle = isHovEdge
+        ? "rgba(40,40,40," + (0.45 * eOp) + ")"
+        : "rgba(40,40,40," + (0.22 * eOp) + ")";
+      ctx.lineWidth = isHovEdge ? 1.2 : 0.75;
+      ctx.stroke();
+    });
+
+    // ── Node-to-node secondary edges (only on hover) ──
+    if (hoveredNode || drillMode) {
+      surfaceEdges.forEach(function(e) {
+        var a = nodeById[e.s], b = nodeById[e.t]; if (!a || !b) return;
+        var minOp = Math.min(a.opacity, b.opacity); if (minOp < 0.05) return;
+        var isHovEdge = hoveredNode && (a === hoveredNode || b === hoveredNode);
+        var isDrillEdge = drillMode && (a.id === drillTarget || b.id === drillTarget);
+        if (!isHovEdge && !isDrillEdge) return;
+
+        var dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 1) return;
+        var ux = dx/d, uy = dy/d;
+        ctx.beginPath();
+        ctx.moveTo(a.x + ux * (a.size * a.visScale + 2), a.y + uy * (a.size * a.visScale + 2));
+        ctx.lineTo(b.x - ux * (b.size * b.visScale + 2), b.y - uy * (b.size * b.visScale + 2));
+        ctx.strokeStyle = "rgba(40,40,40," + (0.20 * minOp) + ")";
+        ctx.lineWidth = 0.75;
+        ctx.stroke();
+      });
+    }
+
+    // ── Kevin center node ──
+    if (kevinOpacity > 0.01) {
+      ctx.globalAlpha = kevinOpacity;
+
+      // Halo
+      var haloR = kevinBreath * 2.6;
+      var g = ctx.createRadialGradient(kevin.x, kevin.y, kevinBreath * 0.5, kevin.x, kevin.y, haloR);
+      g.addColorStop(0, "rgba(83,89,255,0.12)");
+      g.addColorStop(1, "rgba(83,89,255,0)");
+      ctx.beginPath(); ctx.arc(kevin.x, kevin.y, haloR, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+
+      // Core
+      ctx.beginPath(); ctx.arc(kevin.x, kevin.y, kevinBreath, 0, Math.PI * 2);
+      ctx.fillStyle = "#5359FF"; ctx.fill();
+
+      ctx.fillStyle = "rgba(26,26,26," + kevinOpacity + ")";
+      ctx.font = "12px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Kevin Lin", kevin.x, kevin.y + kevinBreath + 20);
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Content nodes ──
+    nodes.forEach(function(n) {
+      if (n.opacity < 0.01) return;
+
+      var isHov = n === hoveredNode;
+      var isSel = drillMode && n.id === drillTarget;
+      var s     = n.size * n.visScale;
+
+      ctx.globalAlpha = n.opacity;
+
+      if (isHov || isSel) {
+        drawShape(n.x, n.y, s, n.shape, "#1A1A1A", null, 0);
+      } else {
+        drawShape(n.x, n.y, s, n.shape, "#FFFFFF", "rgba(0,0,0,0.18)", 1);
+      }
+
+      ctx.font = "13px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = (isHov || isSel) ? "#1A1A1A" : "rgba(80,80,80," + n.opacity + ")";
+      ctx.fillText(n.label, n.x, n.y + s + 20);
+
+      if (isHov) {
+        ctx.fillStyle = "#AAA";
+        ctx.font = "11px -apple-system, sans-serif";
+        ctx.fillText(n.desc, n.x, n.y + s + 36);
+      }
+
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  // ── Input ─────────────────────────────────────────────
+  function getHoveredNode(mx, my) {
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      if (hitTest(mx, my, nodes[i].x, nodes[i].y, nodes[i].size + 14)) return nodes[i];
+    }
+    return null;
+  }
+
+  canvas.addEventListener("mousedown", function(e) {
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
+    didDrag = false;
+
+    // Kevin hit?
+    if (hitTest(e.clientX, e.clientY, kevin.x, kevin.y, kevin.size + 14)) {
+      isDraggingKevin = true;
+      dragNode = null;
+      canvas.style.cursor = "grabbing";
+      return;
+    }
+
+    // Content node hit?
+    var n = getHoveredNode(e.clientX, e.clientY);
+    if (n) {
+      dragNode = n;
+      mouseX = e.clientX; mouseY = e.clientY;
+      canvas.style.cursor = "grabbing";
+    }
+  });
+
+  canvas.addEventListener("mousemove", function(e) {
+    var mx = e.clientX, my = e.clientY;
+
+    if (isDraggingKevin) {
+      kevin.x = mx; kevin.y = my;
+      kevin.vx = 0; kevin.vy = 0;  // no stored velocity — Kevin stops on release
+      didDrag = true;
+      return;
+    }
+
+    if (dragNode) {
+      mouseX = mx; mouseY = my;
+      didDrag = true;
+      return;
+    }
+
+    // Hover detection
+    var hn = getHoveredNode(mx, my);
+    var overKevin = hitTest(mx, my, kevin.x, kevin.y, kevin.size + 14);
+    hoveredNode = hn;
+    canvas.style.cursor = (hn || overKevin) ? "grab" : "default";
+  });
+
+  canvas.addEventListener("mouseup", function(e) {
+    var wasDragging = didDrag;
+    var releasedNode = dragNode;
+
+    if (wasDragging && releasedNode && !isDraggingKevin) {
+      // Drop in place — zero velocity, let spring drift it home
+      releasedNode.vx = 0;
+      releasedNode.vy = 0;
+    }
+
+    isDraggingKevin = false;
+    dragNode = null;
+    didDrag = false;
+
+    if (wasDragging) {
+      canvas.style.cursor = "default";
+      return;
+    }
+
+    // Click — check for node hit
+    var n = getHoveredNode(e.clientX, e.clientY);
+    if (n) {
+      drillMode    = true;
+      drillTarget  = n.id;
+      selectedNode = n.id;
+      showDetail(n);
+    } else if (drillMode) {
+      // Click empty space = exit drill
+      exitDrill();
+    } else {
+      closeDetail();
+    }
+  });
+
+  // ── Detail panel ──────────────────────────────────────
+  window.closeDetail = function() {
+    selectedNode = null;
+    detail.classList.remove("open");
+  };
+
+  window.exitDrill = function() {
+    drillMode    = false;
+    drillTarget  = null;
+    selectedNode = null;
+    detail.classList.remove("open");
+  };
+
+  function showDetail(n) {
+    document.getElementById("d-title").textContent = n.label;
+    document.getElementById("d-meta").textContent  = n.atoms.length + " ideas";
+    document.getElementById("d-claim").textContent = n.desc;
+
+    var connHtml = "<div style='margin-top:8px;font-size:11px;color:#AAA;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;'>Connected to</div>";
+    Object.keys(adj[n.id] || {}).forEach(function(cid) {
+      var cn = nodeById[cid];
+      if (cn) connHtml += "<span onclick='selectNode(\"" + cid + "\")'>" + cn.label + "</span>";
+    });
+    document.getElementById("d-conn").innerHTML = connHtml;
+
+    if (n.atoms.length > 0 && typeof atoms !== "undefined") {
+      var aHtml = "<div style='margin-top:24px;font-size:11px;color:#AAA;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;'>Ideas</div>";
+      n.atoms.slice(0, 5).forEach(function(aid) {
+        var atom = atoms.find(function(a) { return a.id === aid; });
+        if (atom) {
+          aHtml += "<div style='margin-bottom:10px;'>"
+                 + "<div style='font-size:13px;color:#3A3A3A;'>" + atom.title + "</div>"
+                 + "<div style='font-size:12px;color:#888;margin-top:2px;'>" + atom.claim + "</div>"
+                 + "</div>";
+        }
+      });
+      document.getElementById("d-conn").innerHTML += aHtml;
+    }
+
+    detail.classList.add("open");
+  }
+
+  window.selectNode = function(id) {
+    var n = nodeById[id];
+    if (n) { drillMode = true; drillTarget = id; selectedNode = id; showDetail(n); }
+  };
+
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 — Portrait Graph</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #EDEDEB;
+    color: #1A1A1A;
+    font-family: "Georgia", "Times New Roman", serif;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 240px;
+    background: rgba(237,237,235,0.92);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 28px 28px;
+    z-index: 20;
+    display: flex; flex-direction: column;
+  }
+  #sidebar h1 {
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+    color: #1A1A1A;
+    font-family: "Georgia", "Times New Roman", serif;
+  }
+  #sidebar .subtitle {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.5;
+    margin-bottom: 36px;
+    font-family: "Georgia", serif;
+  }
+  #sidebar nav {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  #sidebar nav a {
+    display: block;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: #999;
+    font-size: 14px;
+    font-family: "Georgia", serif;
+    border-radius: 6px;
+    transition: color 0.25s ease, background 0.25s ease;
+    cursor: pointer;
+  }
+  #sidebar nav a:hover {
+    color: #E84D0E;
+    background: transparent;
+  }
+  #sidebar nav a.active {
+    color: #3A3A3A;
+    font-weight: 400;
+  }
+  #sidebar .footer {
+    margin-top: auto;
+    font-size: 11px;
+    color: #CCC;
+    font-family: "Georgia", serif;
+    line-height: 1.6;
+  }
+
+  #detail {
+    position: fixed; right: 0; top: 0; bottom: 0;
+    width: 320px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(16px);
+    border-left: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 32px;
+    z-index: 20;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+  }
+  #detail.open { transform: translateX(0); }
+  #detail h2 {
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+    color: #1A1A1A;
+    font-family: "Georgia", serif;
+  }
+  #detail .meta {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #999;
+    margin-bottom: 20px;
+    font-family: "Georgia", serif;
+  }
+  #detail .claim {
+    font-size: 15px;
+    line-height: 1.65;
+    color: #3A3A3A;
+    font-family: "Georgia", serif;
+    margin-bottom: 24px;
+  }
+  #detail .connections {
+    font-size: 12px;
+    color: #888;
+    font-family: "Georgia", serif;
+    line-height: 1.8;
+  }
+  #detail .connections span {
+    display: inline-block;
+    padding: 3px 10px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 4px;
+    margin: 2px 4px 2px 0;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #detail .connections span:hover { background: rgba(232,77,14,0.08); color: #E84D0E; }
+  #detail .close-btn {
+    position: absolute; top: 20px; right: 20px;
+    width: 28px; height: 28px;
+    border: none; background: rgba(0,0,0,0.04);
+    border-radius: 50%; cursor: pointer;
+    font-size: 14px; color: #888;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  #detail .close-btn:hover { background: rgba(0,0,0,0.08); }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Kevin Lin</h1>
+  <div class="subtitle">Creative technologist.<br>Design, faith, intelligence.</div>
+  <nav>
+    <a href="#" class="active">Explore</a>
+    <a href="#">Work</a>
+    <a href="#">Writing</a>
+    <a href="#">About</a>
+    <a href="#">Contact</a>
+  </nav>
+  <div class="footer">
+    A living knowledge system.
+  </div>
+</div>
+
+<div id="detail">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <h2 id="d-title"></h2>
+  <div class="meta" id="d-meta"></div>
+  <div class="claim" id="d-claim"></div>
+  <div class="connections" id="d-conn"></div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+(function() {
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  var detail = document.getElementById('detail');
+  var W, H, dpr;
+  var hoveredNode = null;
+  var selectedNode = null;
+  var dragging = null;
+  var dragOffsetX = 0, dragOffsetY = 0;
+  var sidebarW = 240;
+  var ACCENT = "#E84D0E";
+
+  // ── Surface Nodes (the 12 interactive portrait nodes) ──
+  var surfaceNodes = [
+    { id: "design", label: "Design", desc: "20 years across industrial, software, VR, and AI", atoms: [56, 57, 58, 109, 110],
+      posRatio: [0.62, 0.38] }, // near right eye
+    { id: "faith", label: "Faith", desc: "The foundation everything rests on", atoms: [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 101, 102, 103],
+      posRatio: [0.50, 0.88] }, // below chin / chest area
+    { id: "intelligence", label: "Intelligence", desc: "Human-AI collaboration as a new dimension", atoms: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      posRatio: [0.50, 0.18] }, // forehead
+    { id: "formation", label: "Formation", desc: "How people grow -- not what they know, but what they become", atoms: [49, 50, 51, 52, 53, 54, 55, 59, 60, 61],
+      posRatio: [0.34, 0.44] }, // left side of face
+    { id: "storytelling", label: "Storytelling", desc: "Narrative as the structure of meaning", atoms: [26, 27, 28, 29, 30, 31, 32, 107, 108],
+      posRatio: [0.50, 0.68] }, // near mouth
+    { id: "identity", label: "Identity", desc: "Who you are shapes what you build", atoms: [33, 34, 35, 62, 63, 64, 65, 66],
+      posRatio: [0.50, 0.42] }, // center of face / nose bridge
+    { id: "knowledge", label: "Knowledge", desc: "Systems for capturing and compounding what you learn", atoms: [1, 2, 3, 4, 5, 6, 67, 68, 69, 70],
+      posRatio: [0.50, 0.08] }, // top of head / crown
+    { id: "perception", label: "Perception", desc: "How we see determines what we see", atoms: [56, 57, 58, 109],
+      posRatio: [0.38, 0.38] }, // near left eye
+    { id: "building", label: "Building", desc: "The act of making as a way of knowing", atoms: [17, 18, 19, 20, 21, 22, 23, 24, 25],
+      posRatio: [0.66, 0.60] }, // right jaw area
+    { id: "scripture", label: "Scripture", desc: "Living words that read the reader", atoms: [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 101, 102, 103],
+      posRatio: [0.32, 0.55] }, // left side, near ear
+    { id: "fatherhood", label: "Fatherhood", desc: "A new dimension arriving September 2026", atoms: [],
+      posRatio: [0.50, 0.98] }, // bottom area
+    { id: "paradigm", label: "Paradigm Shifts", desc: "The walls that dissolve only through encounter", atoms: [49, 50, 71, 72, 73],
+      posRatio: [0.66, 0.30] }, // right temple
+  ];
+
+  var surfaceEdges = [
+    { s: "design", t: "perception" },
+    { s: "design", t: "building" },
+    { s: "faith", t: "scripture" },
+    { s: "faith", t: "formation" },
+    { s: "faith", t: "identity" },
+    { s: "intelligence", t: "building" },
+    { s: "intelligence", t: "knowledge" },
+    { s: "formation", t: "identity" },
+    { s: "formation", t: "paradigm" },
+    { s: "storytelling", t: "identity" },
+    { s: "storytelling", t: "perception" },
+    { s: "knowledge", t: "formation" },
+    { s: "perception", t: "paradigm" },
+    { s: "building", t: "paradigm" },
+    { s: "fatherhood", t: "formation" },
+    { s: "fatherhood", t: "faith" },
+    { s: "scripture", t: "formation" },
+  ];
+
+  // Adjacency map
+  var adj = {};
+  surfaceNodes.forEach(function(n) { adj[n.id] = {}; });
+  surfaceEdges.forEach(function(e) {
+    adj[e.s][e.t] = true;
+    adj[e.t][e.s] = true;
+  });
+
+  // ── Texture Dots + Surface Nodes ──
+  var textureDots = [];
+  var sNodes = [];     // the 12 interactive nodes (runtime objects)
+  var nodeById = {};
+
+  // Seeded random for consistent portrait
+  var seed = 42;
+  function seededRandom() {
+    seed = (seed * 16807 + 0) % 2147483647;
+    return (seed - 1) / 2147483646;
+  }
+
+  // Gaussian-ish random (Box-Muller)
+  function seededGaussian() {
+    var u1 = seededRandom();
+    var u2 = seededRandom();
+    return Math.sqrt(-2 * Math.log(u1 + 0.0001)) * Math.cos(2 * Math.PI * u2);
+  }
+
+  function makeDot(px, py, radius) {
+    return {
+      homeX: px, homeY: py, x: px, y: py,
+      radius: radius, baseRadius: radius,
+      opacity: 1, targetOpacity: 1,
+      phase: seededRandom() * Math.PI * 2,
+      driftPhase: seededRandom() * Math.PI * 2,
+      driftSpeed: 0.3 + seededRandom() * 0.5,
+      driftAmplitude: 0.6 + seededRandom() * 1.0,
+    };
+  }
+
+  // Check min distance from existing dots
+  function isTooClose(px, py, minDist, arr) {
+    for (var i = 0; i < arr.length; i++) {
+      var dx = px - arr[i].homeX;
+      var dy = py - arr[i].homeY;
+      if (dx * dx + dy * dy < minDist * minDist) return true;
+    }
+    return false;
+  }
+
+  // Head silhouette SDF (signed distance-like): <0 inside, >0 outside
+  function headSDF(px, py, cx, cy, hw, hh) {
+    var nx = (px - cx) / (hw * 0.5);
+    var ny = (py - cy) / (hh * 0.5);
+
+    // Egg shape: narrower at top, wider at cheeks, tapered jaw
+    var widthAtY;
+    if (ny < -0.5) {
+      // Upper head / cranium -- slightly narrower
+      widthAtY = 0.88 + ny * 0.08; // narrows toward top
+    } else if (ny < 0.2) {
+      // Cheek / mid face -- widest
+      widthAtY = 1.0;
+    } else if (ny < 0.85) {
+      // Jaw -- tapers
+      var t = (ny - 0.2) / 0.65;
+      widthAtY = 1.0 - t * t * 0.52;
+    } else {
+      // Chin -- narrow point
+      widthAtY = 0.38 - (ny - 0.85) * 1.5;
+      if (widthAtY < 0.15) widthAtY = 0.15;
+    }
+
+    var ovalDist = (nx * nx) / (widthAtY * widthAtY) + ny * ny;
+    return ovalDist - 1.0;
+  }
+
+  function generatePortrait() {
+    seed = 42;
+    textureDots = [];
+    sNodes = [];
+    nodeById = {};
+
+    var canvasCx = sidebarW + (W - sidebarW) / 2;
+    var canvasCy = H / 2;
+
+    // Head dimensions
+    var headH = Math.min(H * 0.70, (W - sidebarW) * 0.80);
+    var headW = headH * 0.68;
+    var cx = canvasCx;
+    var cy = canvasCy;
+
+    // ── STEP 1: Structured feature dots (eyes, eyebrows, nose, mouth, jawline) ──
+
+    // Helper: place dots along a parametric curve
+    function placeCurve(points, count, radiusMin, radiusMax, jitter) {
+      for (var i = 0; i < count; i++) {
+        var t = i / (count - 1);
+        // Interpolate along points
+        var segF = t * (points.length - 1);
+        var segI = Math.floor(segF);
+        if (segI >= points.length - 1) segI = points.length - 2;
+        var segT = segF - segI;
+        var px = points[segI][0] + (points[segI + 1][0] - points[segI][0]) * segT;
+        var py = points[segI][1] + (points[segI + 1][1] - points[segI][1]) * segT;
+        px += (seededRandom() - 0.5) * jitter;
+        py += (seededRandom() - 0.5) * jitter;
+        var r = radiusMin + seededRandom() * (radiusMax - radiusMin);
+        if (!isTooClose(px, py, r * 2, textureDots)) {
+          textureDots.push(makeDot(px, py, r));
+        }
+      }
+    }
+
+    // Helper: place dots in an elliptical cluster
+    function placeCluster(ecx, ecy, rx, ry, count, radiusMin, radiusMax) {
+      var placed = 0;
+      var attempts = 0;
+      while (placed < count && attempts < count * 8) {
+        attempts++;
+        var angle = seededRandom() * Math.PI * 2;
+        var dist = Math.sqrt(seededRandom()); // uniform in area
+        var px = ecx + Math.cos(angle) * rx * dist;
+        var py = ecy + Math.sin(angle) * ry * dist;
+        var r = radiusMin + seededRandom() * (radiusMax - radiusMin);
+        if (!isTooClose(px, py, r * 2.2, textureDots)) {
+          textureDots.push(makeDot(px, py, r));
+          placed++;
+        }
+      }
+    }
+
+    // Eye positions (relative to head center)
+    var eyeY = cy - headH * 0.08;
+    var eyeSpread = headW * 0.19;
+
+    // LEFT EYE - almond shape cluster
+    placeCluster(cx - eyeSpread, eyeY, headW * 0.10, headH * 0.032, 16, 1.2, 2.2);
+
+    // RIGHT EYE - almond shape cluster
+    placeCluster(cx + eyeSpread, eyeY, headW * 0.10, headH * 0.032, 16, 1.2, 2.2);
+
+    // EYEBROWS - arched curves above eyes
+    var browY = eyeY - headH * 0.065;
+    var browW = headW * 0.13;
+    // Left brow
+    placeCurve([
+      [cx - eyeSpread - browW, browY + 3],
+      [cx - eyeSpread - browW * 0.3, browY - 4],
+      [cx - eyeSpread + browW * 0.5, browY - 2],
+      [cx - eyeSpread + browW, browY + 2]
+    ], 8, 1.3, 2.0, 3);
+    // Right brow
+    placeCurve([
+      [cx + eyeSpread - browW, browY + 2],
+      [cx + eyeSpread - browW * 0.5, browY - 2],
+      [cx + eyeSpread + browW * 0.3, browY - 4],
+      [cx + eyeSpread + browW, browY + 3]
+    ], 8, 1.3, 2.0, 3);
+
+    // NOSE - vertical line with slight bulge at tip
+    var noseTop = cy + headH * 0.0;
+    var noseBot = cy + headH * 0.18;
+    var noseMid = (noseTop + noseBot) / 2;
+    // Bridge
+    placeCurve([
+      [cx, noseTop],
+      [cx + 1, noseMid],
+      [cx, noseBot - headH * 0.03]
+    ], 6, 1.2, 1.8, 2);
+    // Nostrils (two small clusters at bottom)
+    placeCluster(cx - headW * 0.035, noseBot, headW * 0.025, headH * 0.012, 4, 1.0, 1.6);
+    placeCluster(cx + headW * 0.035, noseBot, headW * 0.025, headH * 0.012, 4, 1.0, 1.6);
+
+    // MOUTH - curved line
+    var mouthY = cy + headH * 0.28;
+    var mouthW = headW * 0.15;
+    // Upper lip
+    placeCurve([
+      [cx - mouthW, mouthY + 2],
+      [cx - mouthW * 0.5, mouthY - 3],
+      [cx, mouthY - 4],  // cupid's bow
+      [cx + mouthW * 0.5, mouthY - 3],
+      [cx + mouthW, mouthY + 2]
+    ], 10, 1.2, 2.0, 2);
+    // Lower lip
+    placeCurve([
+      [cx - mouthW * 0.85, mouthY + 3],
+      [cx - mouthW * 0.3, mouthY + 8],
+      [cx, mouthY + 9],
+      [cx + mouthW * 0.3, mouthY + 8],
+      [cx + mouthW * 0.85, mouthY + 3]
+    ], 8, 1.0, 1.8, 2);
+
+    // ── STEP 2: Head outline dots (denser along the silhouette edge) ──
+    var outlineDots = 80;
+    for (var i = 0; i < outlineDots; i++) {
+      var t = i / outlineDots;
+      var angle = t * Math.PI * 2 - Math.PI * 0.5; // start from top
+
+      // Walk the outline using the SDF to find the edge
+      var testR = 0.95;
+      var nx = Math.cos(angle) * testR;
+      var ny = Math.sin(angle) * testR;
+
+      // Get width at this y to trace the actual shape
+      var rawNy = ny;
+      var widthAtY;
+      if (rawNy < -0.5) {
+        widthAtY = 0.88 + rawNy * 0.08;
+      } else if (rawNy < 0.2) {
+        widthAtY = 1.0;
+      } else if (rawNy < 0.85) {
+        var tt = (rawNy - 0.2) / 0.65;
+        widthAtY = 1.0 - tt * tt * 0.52;
+      } else {
+        widthAtY = 0.38 - (rawNy - 0.85) * 1.5;
+        if (widthAtY < 0.15) widthAtY = 0.15;
+      }
+
+      // Trace the ellipse at this angle
+      var edgeNx = Math.cos(angle) * widthAtY;
+      var edgeNy = Math.sin(angle);
+      // Normalize to sit on the unit oval boundary
+      var scale = 1.0 / Math.sqrt((edgeNx * edgeNx) / (widthAtY * widthAtY) + edgeNy * edgeNy);
+      edgeNx *= scale;
+      edgeNy *= scale;
+
+      var px = cx + edgeNx * headW * 0.5;
+      var py = cy + edgeNy * headH * 0.5;
+
+      // Add jitter
+      px += (seededRandom() - 0.5) * 6;
+      py += (seededRandom() - 0.5) * 6;
+
+      var r = 1.8 + seededRandom() * 1.8;
+      if (!isTooClose(px, py, r * 2.5, textureDots)) {
+        textureDots.push(makeDot(px, py, r));
+      }
+    }
+
+    // ── STEP 3: Interior fill (medium density, scattered inside the head) ──
+    var fillAttempts = 0;
+    var fillTarget = 200;
+    var fillCount = 0;
+    while (fillCount < fillTarget && fillAttempts < 4000) {
+      fillAttempts++;
+      var px = cx + (seededRandom() - 0.5) * headW * 1.1;
+      var py = cy + (seededRandom() - 0.5) * headH * 1.1;
+
+      var sdf = headSDF(px, py, cx, cy, headW, headH);
+      if (sdf > -0.05) continue; // outside or very near edge (already have edge dots)
+
+      // Vary density: slightly denser on cheeks and forehead
+      var ny = (py - cy) / (headH * 0.5);
+      var acceptChance = 0.5;
+      if (ny < -0.3 && ny > -0.7) acceptChance = 0.6; // forehead
+      if (ny > -0.1 && ny < 0.25) acceptChance = 0.4; // mid-face (features already dense)
+
+      if (seededRandom() > acceptChance) continue;
+
+      var r = 1.5 + seededRandom() * 2.0;
+      var minSep = r * 3.0;
+
+      // Less dense near features (eyes, nose, mouth already have dots)
+      var distToLeftEye = Math.sqrt(Math.pow(px - (cx - eyeSpread), 2) + Math.pow(py - eyeY, 2));
+      var distToRightEye = Math.sqrt(Math.pow(px - (cx + eyeSpread), 2) + Math.pow(py - eyeY, 2));
+      var distToNose = Math.sqrt(Math.pow(px - cx, 2) + Math.pow(py - (noseTop + noseBot) / 2, 2));
+      var distToMouth = Math.sqrt(Math.pow(px - cx, 2) + Math.pow(py - mouthY, 2));
+      var nearFeature = Math.min(distToLeftEye, distToRightEye, distToNose, distToMouth);
+      if (nearFeature < headW * 0.08) minSep = r * 4.5;
+
+      if (!isTooClose(px, py, minSep, textureDots)) {
+        textureDots.push(makeDot(px, py, r));
+        fillCount++;
+      }
+    }
+
+    // ── STEP 4: Hair / atmosphere dots (sparse, above and around head) ──
+    var hairAttempts = 0;
+    var hairTarget = 40;
+    var hairCount = 0;
+    while (hairCount < hairTarget && hairAttempts < 1500) {
+      hairAttempts++;
+      var angle = (seededRandom() - 0.5) * Math.PI * 1.2 - Math.PI * 0.5; // concentrated above
+      var dist = 1.02 + seededRandom() * 0.25; // just outside the head
+      var px = cx + Math.cos(angle) * headW * 0.5 * dist + (seededRandom() - 0.5) * 20;
+      var py = cy + Math.sin(angle) * headH * 0.5 * dist + (seededRandom() - 0.5) * 12;
+
+      // Only above the ears
+      if (py > cy + headH * 0.05) continue;
+
+      var sdf = headSDF(px, py, cx, cy, headW, headH);
+      if (sdf < 0.02) continue; // inside head
+
+      var r = 1.2 + seededRandom() * 1.5;
+      if (!isTooClose(px, py, r * 3, textureDots)) {
+        textureDots.push(makeDot(px, py, r));
+        hairCount++;
+      }
+    }
+
+    // ── STEP 5: Neck / shoulder hints (very sparse, below chin) ──
+    var chinY = cy + headH * 0.48;
+    var neckDots = 15;
+    for (var i = 0; i < neckDots; i++) {
+      var px = cx + (seededRandom() - 0.5) * headW * 0.25;
+      var py = chinY + seededRandom() * headH * 0.18;
+      var r = 1.5 + seededRandom() * 1.5;
+      if (!isTooClose(px, py, r * 3.5, textureDots)) {
+        textureDots.push(makeDot(px, py, r));
+      }
+    }
+
+    // ── STEP 6: Ambient scatter (very sparse, far from head) ──
+    for (var i = 0; i < 20; i++) {
+      var px = cx + (seededRandom() - 0.5) * headW * 2;
+      var py = cy + (seededRandom() - 0.5) * headH * 1.5;
+      var sdf = headSDF(px, py, cx, cy, headW, headH);
+      if (sdf < 0.15) continue;
+      var r = 1.0 + seededRandom() * 1.2;
+      if (!isTooClose(px, py, r * 5, textureDots)) {
+        textureDots.push(makeDot(px, py, r));
+      }
+    }
+
+    // ── Create surface nodes at portrait-relative positions ──
+    surfaceNodes.forEach(function(sn) {
+      var nx = cx + (sn.posRatio[0] - 0.5) * headW * 1.1;
+      var ny = cy + (sn.posRatio[1] - 0.5) * headH * 1.1;
+
+      var n = {
+        id: sn.id,
+        label: sn.label,
+        desc: sn.desc,
+        atoms: sn.atoms,
+        homeX: nx,
+        homeY: ny,
+        x: nx,
+        y: ny,
+        vx: 0,
+        vy: 0,
+        radius: 9,
+        baseRadius: 9,
+        opacity: 1,
+        targetOpacity: 1,
+        phase: seededRandom() * Math.PI * 2,
+        driftPhase: seededRandom() * Math.PI * 2,
+        driftSpeed: 0.2 + seededRandom() * 0.3,
+        driftAmplitude: 0.6 + seededRandom() * 0.8,
+        isSurface: true,
+      };
+      sNodes.push(n);
+      nodeById[sn.id] = n;
+    });
+
+    // Remove any texture dots that overlap with surface nodes
+    textureDots = textureDots.filter(function(d) {
+      for (var i = 0; i < sNodes.length; i++) {
+        var dx = d.homeX - sNodes[i].homeX;
+        var dy = d.homeY - sNodes[i].homeY;
+        if (Math.sqrt(dx * dx + dy * dy) < 22) return false;
+      }
+      return true;
+    });
+  }
+
+  // ── Setup ──
+  function setup() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    generatePortrait();
+  }
+  setup();
+  window.addEventListener("resize", function() { setup(); });
+
+  // ── Hit test for surface nodes (uses drawX/drawY which includes drift) ──
+  function hitTestNode(mx, my) {
+    var best = null;
+    var bestDist = Infinity;
+    for (var i = 0; i < sNodes.length; i++) {
+      var n = sNodes[i];
+      var tx = n.drawX !== undefined ? n.drawX : n.x;
+      var ty = n.drawY !== undefined ? n.drawY : n.y;
+      var dx = mx - tx;
+      var dy = my - ty;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < n.radius + 16 && dist < bestDist) {
+        best = n;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  // ── Living Motion System ──
+  // The portrait breathes, sways, and blinks like a living face
+
+  // Head center (computed during generation, used for motion)
+  var headCx, headCy, headW_val, headH_val;
+
+  // Blink state
+  var blinkTimer = 0;
+  var blinkState = 0;  // 0 = open, transitioning to 1 = closed
+  var nextBlink = 3 + Math.random() * 4; // seconds until next blink
+  var blinkDuration = 0.15; // how fast the blink closes/opens
+  var blinkPhase = "open"; // open, closing, closed, opening
+
+  function updateBlink(time) {
+    blinkTimer += 1/60;
+    if (blinkPhase === "open" && blinkTimer > nextBlink) {
+      blinkPhase = "closing";
+      blinkTimer = 0;
+    } else if (blinkPhase === "closing") {
+      blinkState = Math.min(1, blinkTimer / blinkDuration);
+      if (blinkState >= 1) {
+        blinkPhase = "closed";
+        blinkTimer = 0;
+      }
+    } else if (blinkPhase === "closed") {
+      if (blinkTimer > 0.06) {
+        blinkPhase = "opening";
+        blinkTimer = 0;
+      }
+    } else if (blinkPhase === "opening") {
+      blinkState = 1 - Math.min(1, blinkTimer / blinkDuration);
+      if (blinkState <= 0) {
+        blinkState = 0;
+        blinkPhase = "open";
+        blinkTimer = 0;
+        nextBlink = 2.5 + Math.random() * 5; // random interval
+        // Occasional double blink
+        if (Math.random() < 0.2) nextBlink = 0.3;
+      }
+    }
+  }
+
+  // Compute living motion offset for a dot based on its position relative to face
+  function getLivingOffset(homeX, homeY, time) {
+    var canvasCx = sidebarW + (W - sidebarW) / 2;
+    var canvasCy = H / 2;
+    var headH = Math.min(H * 0.70, (W - sidebarW) * 0.80);
+    var headW = headH * 0.68;
+
+    // Normalized position relative to face center (-1 to 1)
+    var nx = (homeX - canvasCx) / (headW * 0.5);
+    var ny = (homeY - canvasCy) / (headH * 0.5);
+
+    // 1. BREATHING — chest/lower face rises and falls subtly
+    var breathCycle = Math.sin(time * 0.4) * 0.5 + Math.sin(time * 0.37) * 0.3;
+    var breathY = breathCycle * (0.8 + ny * 0.5); // stronger at bottom
+    var breathX = breathCycle * nx * 0.15; // slight lateral expansion
+
+    // 2. HEAD SWAY — very slow, gentle side-to-side like a person at rest
+    var swayX = Math.sin(time * 0.15) * 2.5 + Math.sin(time * 0.23) * 1.0;
+    var swayY = Math.cos(time * 0.12) * 1.2;
+    // Sway is uniform across the whole head (rigid body motion)
+
+    // 3. HEAD TILT — very subtle rotation around the center
+    var tilt = Math.sin(time * 0.1) * 0.015 + Math.sin(time * 0.17) * 0.008; // radians
+    var tiltX = -ny * Math.sin(tilt) * headW * 0.3;
+    var tiltY = nx * Math.sin(tilt) * headH * 0.15;
+
+    // 4. BLINK — eye-region dots contract vertically during blink
+    var blinkY = 0;
+    var eyeRegion = (ny > -0.25 && ny < 0.05 && Math.abs(nx) > 0.15 && Math.abs(nx) < 0.65);
+    if (eyeRegion && blinkState > 0) {
+      // Dots in eye region squeeze toward the eye center line
+      var eyeCenterY = -0.1;
+      var distFromCenter = ny - eyeCenterY;
+      blinkY = -distFromCenter * blinkState * headH * 0.08;
+    }
+
+    // 5. MICRO-EXPRESSIONS — very subtle, random tiny shifts
+    var microX = Math.sin(time * 1.7 + homeX * 0.01) * 0.3;
+    var microY = Math.cos(time * 1.3 + homeY * 0.01) * 0.3;
+
+    return {
+      x: swayX + breathX + tiltX + microX,
+      y: swayY + breathY + tiltY + blinkY + microY
+    };
+  }
+
+  // ── Animation Loop ──
+  function draw() {
+    var time = Date.now() * 0.001; // seconds
+    ctx.clearRect(0, 0, W, H);
+
+    updateBlink(time);
+
+    // Determine which nodes are "active" (hovered or connected to hovered)
+    var activeSet = {};
+    if (hoveredNode) {
+      activeSet[hoveredNode.id] = true;
+      var connected = adj[hoveredNode.id] || {};
+      for (var key in connected) {
+        activeSet[key] = true;
+      }
+    }
+    if (selectedNode) {
+      activeSet[selectedNode] = true;
+      var selConnected = adj[selectedNode] || {};
+      for (var key in selConnected) {
+        activeSet[key] = true;
+      }
+    }
+    var hasActive = hoveredNode || selectedNode;
+
+    // ── Update and draw texture dots ──
+    for (var i = 0; i < textureDots.length; i++) {
+      var d = textureDots[i];
+
+      // Target opacity
+      d.targetOpacity = hasActive ? 0.03 : 1;
+
+      // Smooth opacity lerp
+      d.opacity += (d.targetOpacity - d.opacity) * 0.08;
+
+      if (d.opacity < 0.005) continue;
+
+      // Living motion (head sway, breathing, blink, tilt)
+      var living = getLivingOffset(d.homeX, d.homeY, time);
+
+      // Plus individual drift
+      var driftX = Math.sin(time * d.driftSpeed + d.driftPhase) * d.driftAmplitude * 0.5;
+      var driftY = Math.cos(time * d.driftSpeed * 0.7 + d.driftPhase + 1.3) * d.driftAmplitude * 0.5;
+
+      d.x = d.homeX + living.x + driftX;
+      d.y = d.homeY + living.y + driftY;
+
+      // Breathing (size oscillation)
+      var breath = Math.sin(time * 1.2 + d.phase) * 0.4;
+      var r = d.baseRadius + breath;
+
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(138,138,136," + d.opacity + ")";
+      ctx.fill();
+    }
+
+    // ── Update surface node positions first (needed for edges) ──
+    for (var i = 0; i < sNodes.length; i++) {
+      var n = sNodes[i];
+
+      // Target opacity
+      if (!hasActive) {
+        n.targetOpacity = 1;
+      } else {
+        n.targetOpacity = activeSet[n.id] ? 1 : 0.03;
+      }
+
+      // Smooth opacity lerp
+      n.opacity += (n.targetOpacity - n.opacity) * 0.08;
+
+      // Spring back to home position when not dragging
+      if (n !== dragging) {
+        var springK = 0.02;
+        var damp = 0.85;
+        var shx = n.homeX - n.x;
+        var shy = n.homeY - n.y;
+        n.vx += shx * springK;
+        n.vy += shy * springK;
+        n.vx *= damp;
+        n.vy *= damp;
+        n.x += n.vx;
+        n.y += n.vy;
+      }
+
+      // Living motion + individual drift
+      var living = getLivingOffset(n.homeX, n.homeY, time);
+      var driftX = Math.sin(time * n.driftSpeed + n.driftPhase) * n.driftAmplitude * 0.5;
+      var driftY = Math.cos(time * n.driftSpeed * 0.7 + n.driftPhase + 1.3) * n.driftAmplitude * 0.5;
+      n.drawX = n.x + living.x + driftX;
+      n.drawY = n.y + living.y + driftY;
+    }
+
+    // ── Draw edges (only when active) ──
+    if (hasActive) {
+      surfaceEdges.forEach(function(e) {
+        var a = nodeById[e.s];
+        var b = nodeById[e.t];
+        if (!a || !b) return;
+
+        var aActive = activeSet[a.id];
+        var bActive = activeSet[b.id];
+        if (!aActive || !bActive) return;
+
+        var alpha = Math.min(a.opacity, b.opacity) * 0.15;
+        if (alpha < 0.005) return;
+
+        // Curved edge using draw positions
+        var ax = a.drawX, ay = a.drawY;
+        var bx = b.drawX, by = b.drawY;
+        var mx = (ax + bx) / 2;
+        var my = (ay + by) / 2;
+        var dx = bx - ax;
+        var dy = by - ay;
+        var perpX = -dy * 0.08;
+        var perpY = dx * 0.08;
+
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(mx + perpX, my + perpY, bx, by);
+        ctx.strokeStyle = "rgba(60,60,58," + alpha + ")";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+    }
+
+    // ── Draw surface nodes ──
+    for (var i = 0; i < sNodes.length; i++) {
+      var n = sNodes[i];
+      var drawX = n.drawX;
+      var drawY = n.drawY;
+
+      if (n.opacity < 0.005) continue;
+
+      // Breathing
+      var breath = Math.sin(time * 1.0 + n.phase) * 0.6;
+      var r = n.baseRadius + breath;
+
+      var isHov = (n === hoveredNode);
+      var isSel = (selectedNode && n.id === selectedNode);
+
+      ctx.globalAlpha = n.opacity;
+
+      if (isHov || isSel) {
+        // Filled with accent orange
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, r, 0, Math.PI * 2);
+        ctx.fillStyle = ACCENT;
+        ctx.fill();
+      } else if (hasActive && activeSet[n.id]) {
+        // Connected node: gray fill + orange outline
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#8A8A88";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, r + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = ACCENT;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        // Default: same as texture dots but with a subtle stroke
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#8A8A88";
+        ctx.fill();
+        ctx.strokeStyle = "#7A7A78";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      // Labels
+      if (isHov || isSel) {
+        ctx.fillStyle = "#1A1A1A";
+        ctx.font = "13px Georgia, serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.label, drawX, drawY + r + 20);
+
+        // Description
+        ctx.fillStyle = "#999";
+        ctx.font = "11px Georgia, serif";
+        ctx.fillText(n.desc, drawX, drawY + r + 36);
+      } else if (hasActive && activeSet[n.id]) {
+        // Connected node: show label only
+        ctx.fillStyle = "#666";
+        ctx.font = "13px Georgia, serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.label, drawX, drawY + r + 20);
+      }
+
+      ctx.globalAlpha = 1;
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  // ── Interaction ──
+  canvas.addEventListener("mousedown", function(e) {
+    var hit = hitTestNode(e.clientX, e.clientY);
+    if (hit) {
+      dragging = hit;
+      dragOffsetX = hit.x - e.clientX;
+      dragOffsetY = hit.y - e.clientY;
+      dragging._clickX = e.clientX;
+      dragging._clickY = e.clientY;
+    }
+  });
+
+  canvas.addEventListener("mousemove", function(e) {
+    if (dragging) {
+      dragging.x = e.clientX + dragOffsetX;
+      dragging.y = e.clientY + dragOffsetY;
+      dragging.vx = 0;
+      dragging.vy = 0;
+    }
+    hoveredNode = hitTestNode(e.clientX, e.clientY);
+    canvas.style.cursor = hoveredNode ? "pointer" : "default";
+  });
+
+  canvas.addEventListener("mouseup", function(e) {
+    if (dragging) {
+      var dx = e.clientX - (dragging._clickX || 0);
+      var dy = e.clientY - (dragging._clickY || 0);
+      if (Math.sqrt(dx * dx + dy * dy) < 5) {
+        selectedNode = dragging.id;
+        showDetail(dragging);
+      }
+      dragging = null;
+    }
+  });
+
+  canvas.addEventListener("click", function(e) {
+    if (!hoveredNode && !dragging) {
+      closeDetail();
+    }
+  });
+
+  canvas.addEventListener("mouseleave", function() {
+    hoveredNode = null;
+  });
+
+  // ── Detail Panel ──
+  window.closeDetail = function() {
+    selectedNode = null;
+    detail.classList.remove("open");
+  };
+
+  function showDetail(n) {
+    document.getElementById("d-title").textContent = n.label;
+    document.getElementById("d-meta").textContent = n.atoms.length + " ideas";
+    document.getElementById("d-claim").textContent = n.desc;
+
+    var connHtml = "<div style='margin-top:8px; font-size:11px; color:#AAA; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;'>Connected to</div>";
+    var connected = Object.keys(adj[n.id] || {});
+    connected.forEach(function(cid) {
+      var cn = nodeById[cid];
+      if (cn) {
+        connHtml += "<span onclick='selectNode(\"" + cid + "\")'>" + cn.label + "</span>";
+      }
+    });
+    document.getElementById("d-conn").innerHTML = connHtml;
+
+    if (n.atoms.length > 0) {
+      var atomsHtml = "<div style='margin-top:24px; font-size:11px; color:#AAA; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;'>Ideas</div>";
+      var shown = n.atoms.slice(0, 5);
+      shown.forEach(function(aid) {
+        var atom = atoms.find(function(a) { return a.id === aid; });
+        if (atom) {
+          atomsHtml += "<div style='margin-bottom:10px;'><div style='font-size:13px; color:#3A3A3A;'>" + atom.title + "</div><div style='font-size:12px; color:#888; margin-top:2px;'>" + atom.claim + "</div></div>";
+        }
+      });
+      document.getElementById("d-conn").innerHTML += atomsHtml;
+    }
+
+    detail.classList.add("open");
+  }
+
+  window.selectNode = function(id) {
+    var n = nodeById[id];
+    if (n) {
+      selectedNode = id;
+      hoveredNode = n;
+      showDetail(n);
+    }
+  };
+
+  draw();
+})();
+</script>
+</body>
+</html>

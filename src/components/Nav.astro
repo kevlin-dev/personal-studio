@@ -1,27 +1,101 @@
 ---
 const navLinks = [
-  { href: '/work', label: 'Work' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/writing', label: 'Writing' },
-  { href: '/about', label: 'About' },
-  { href: '/connect', label: 'Connect' },
+  { href: '#work', label: 'Work' },
+  { href: '#writing', label: 'Writing' },
+  { href: '#philosophy', label: 'Thinking' },
+  { href: '#connect', label: 'Connect' },
 ];
-
-const currentPath = Astro.url.pathname;
 ---
 
-<nav aria-label="Main navigation">
-  <a href="/" class="site-name" aria-label="Home">Kevin Lin</a>
-  <ul role="list">
+<nav class="nav" aria-label="Main navigation" id="nav">
+  <a href="/" class="nav-logo">Kevin Lin</a>
+
+  <ul class="nav-links" role="list">
     {navLinks.map(({ href, label }) => (
       <li>
-        <a
-          href={href}
-          aria-current={currentPath.startsWith(href) ? 'page' : undefined}
-        >
+        <a href={href} class="nav-link" data-stagger>
           {label}
         </a>
       </li>
     ))}
   </ul>
+
+  <button
+    class="nav-hamburger"
+    id="nav-hamburger"
+    aria-label="Toggle menu"
+    aria-expanded="false"
+  >
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
 </nav>
+
+<div class="nav-mobile-overlay" id="nav-mobile-overlay">
+  {navLinks.map(({ href, label }) => (
+    <a href={href} class="mobile-nav-link">{label}</a>
+  ))}
+</div>
+
+<script>
+  // Nav scroll state
+  const nav = document.getElementById('nav');
+  let ticking = false;
+
+  function updateNav() {
+    if (window.scrollY > 80) {
+      nav?.classList.add('scrolled');
+    } else {
+      nav?.classList.remove('scrolled');
+    }
+    ticking = false;
+  }
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(updateNav);
+      ticking = true;
+    }
+  }, { passive: true });
+
+  // Letter stagger
+  document.querySelectorAll<HTMLAnchorElement>('[data-stagger]').forEach(link => {
+    const text = link.textContent?.trim() || '';
+    link.innerHTML = `
+      <span style="display:flex;flex-direction:column;overflow:hidden;height:1.3em;">
+        <span class="stagger-visible" style="display:flex;">
+          ${text.split('').map((c, i) =>
+            `<span class="stagger-char" style="transition-delay:${i * 10}ms">${c === ' ' ? '&nbsp;' : c}</span>`
+          ).join('')}
+        </span>
+        <span class="stagger-hidden" style="display:flex;">
+          ${text.split('').map((c, i) =>
+            `<span class="stagger-char" style="transition-delay:${i * 10}ms">${c === ' ' ? '&nbsp;' : c}</span>`
+          ).join('')}
+        </span>
+      </span>
+    `;
+  });
+
+  // Mobile menu toggle
+  const hamburger = document.getElementById('nav-hamburger');
+  const overlay = document.getElementById('nav-mobile-overlay');
+
+  hamburger?.addEventListener('click', () => {
+    const isOpen = hamburger.classList.toggle('open');
+    overlay?.classList.toggle('open');
+    hamburger.setAttribute('aria-expanded', String(isOpen));
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+  });
+
+  // Close mobile menu on link click
+  overlay?.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      hamburger?.classList.remove('open');
+      overlay.classList.remove('open');
+      hamburger?.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    });
+  });
+</script>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 — Light Minimal (Nitin Sangwan Style)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #FAFAF8; color: #1A1A1A; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(255,255,255,0.97); border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: #1A1A1A; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; color: #666; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; color: #BBB; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; color: #1A1A1A; margin-bottom: 4px; }
+  #controls {
+    position: fixed; top: 24px; right: 24px; z-index: 10;
+    display: flex; gap: 8px;
+  }
+  .btn {
+    background: transparent; border: 1px solid rgba(0,0,0,0.1);
+    color: #999; padding: 6px 12px; border-radius: 20px; font-size: 11px;
+    cursor: pointer; letter-spacing: 0.03em; transition: all 0.2s;
+  }
+  .btn:hover { color: #1A1A1A; border-color: rgba(0,0,0,0.2); }
+  .btn.active { color: #1A1A1A; border-color: rgba(0,0,0,0.3); background: rgba(0,0,0,0.03); }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>06 — Light Minimal</h2>
+  White background. Gray outlines. Clean. Hover to explore.
+</div>
+<div id="controls">
+  <button class="btn active" onclick="toggleEdges(this)">Edges</button>
+  <button class="btn" onclick="toggleLabels(this)">Labels</button>
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W = window.innerWidth, H = window.innerHeight, dpr = window.devicePixelRatio || 1;
+let hoveredNode = null;
+let dragging = null;
+let showEdges = true;
+let showLabels = false;
+let isPanning = false, panStartX = 0, panStartY = 0, camStartX = 0, camStartY = 0;
+let camX = 0, camY = 0, zoom = 1;
+
+function toggleEdges(btn) { showEdges = !showEdges; btn.classList.toggle('active'); }
+function toggleLabels(btn) { showLabels = !showLabels; btn.classList.toggle('active'); }
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Light theme domain colors — muted pastels
+const LIGHT_COLORS = {
+  "Foundation": "#B8860B",
+  "Knowledge Work": "#4A7AB5",
+  "Biblical Theology": "#A85454",
+  "Theology": "#A85454",
+  "Philosophy": "#7B5EA7",
+  "Identity": "#3BA89E",
+  "Content & Communication": "#C97B3A",
+  "Curriculum Design": "#5A9E65",
+  "Design": "#C45B7F",
+};
+function lightColor(domain) {
+  return LIGHT_COLORS[getPrimaryDomain(domain)] || '#888';
+}
+
+const adjacency = {};
+atoms.forEach(a => adjacency[a.id] = new Set());
+edges.forEach(e => { adjacency[e.source].add(e.target); adjacency[e.target].add(e.source); });
+
+const connCount = {};
+atoms.forEach(a => connCount[a.id] = 0);
+edges.forEach(e => { connCount[e.source]++; connCount[e.target]++; });
+
+const nodeMap = {};
+const nodes = atoms.map(a => {
+  const n = {
+    ...a,
+    x: W/2 + (Math.random() - 0.5) * W * 0.6,
+    y: H/2 + (Math.random() - 0.5) * H * 0.6,
+    vx: 0, vy: 0,
+    radius: Math.max(3, Math.min(9, 3 + (connCount[a.id] || 0) * 0.4)),
+    color: lightColor(a.domain),
+  };
+  nodeMap[a.id] = n;
+  return n;
+});
+
+const linkObjs = edges.map(e => ({ source: nodeMap[e.source], target: nodeMap[e.target] }));
+
+function screenToWorld(sx, sy) {
+  return { x: (sx - W/2) / zoom + camX, y: (sy - H/2) / zoom + camY };
+}
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom = Math.max(0.3, Math.min(4, zoom * (e.deltaY > 0 ? 0.93 : 1.07)));
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  const world = screenToWorld(e.clientX, e.clientY);
+  let closest = null, closestDist = Infinity;
+  nodes.forEach(n => {
+    const dx = n.x - world.x, dy = n.y - world.y;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < n.radius / zoom + 8 && d < closestDist) { closest = n; closestDist = d; }
+  });
+  if (closest) { dragging = closest; }
+  else { isPanning = true; panStartX = e.clientX; panStartY = e.clientY; camStartX = camX; camStartY = camY; }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (dragging) {
+    const world = screenToWorld(e.clientX, e.clientY);
+    dragging.x = world.x; dragging.y = world.y; dragging.vx = 0; dragging.vy = 0;
+  } else if (isPanning) {
+    camX = camStartX - (e.clientX - panStartX) / zoom;
+    camY = camStartY - (e.clientY - panStartY) / zoom;
+  } else {
+    const world = screenToWorld(e.clientX, e.clientY);
+    let closest = null, closestDist = Infinity;
+    nodes.forEach(n => {
+      const dx = n.x - world.x, dy = n.y - world.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d < n.radius / zoom + 12 && d < closestDist) { closest = n; closestDist = d; }
+    });
+    hoveredNode = closest;
+    if (closest) {
+      document.getElementById('tt-title').textContent = '#' + closest.id + ' ' + closest.title;
+      document.getElementById('tt-level').textContent = closest.level + ' \u00B7 ' + closest.domain;
+      document.getElementById('tt-claim').textContent = closest.claim;
+      tooltip.classList.add('visible');
+      tooltip.style.left = Math.min(e.clientX + 16, W - 340) + 'px';
+      tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+      canvas.style.cursor = 'pointer';
+    } else {
+      tooltip.classList.remove('visible');
+      canvas.style.cursor = 'grab';
+    }
+  }
+});
+canvas.addEventListener('mouseup', () => { dragging = null; isPanning = false; });
+
+// Physics
+function simulate() {
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const force = 600 / (d * d);
+      a.vx += (dx/d) * force; a.vy += (dy/d) * force;
+      b.vx -= (dx/d) * force; b.vy -= (dy/d) * force;
+    }
+  }
+  linkObjs.forEach(l => {
+    const dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = (d - 70) * 0.003;
+    l.source.vx += (dx/d)*force; l.source.vy += (dy/d)*force;
+    l.target.vx -= (dx/d)*force; l.target.vy -= (dy/d)*force;
+  });
+  nodes.forEach(n => {
+    if (n === dragging) return;
+    n.vx -= (n.x - W/2) * 0.0004;
+    n.vy -= (n.y - H/2) * 0.0004;
+    n.vx *= 0.92; n.vy *= 0.92;
+    n.x += n.vx; n.y += n.vy;
+  });
+}
+
+function draw() {
+  simulate();
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-camX, -camY);
+
+  // Edges — thin gray lines
+  if (showEdges) {
+    linkObjs.forEach(l => {
+      const isHovered = hoveredNode && (l.source === hoveredNode || l.target === hoveredNode);
+      ctx.beginPath();
+      ctx.moveTo(l.source.x, l.source.y);
+      ctx.lineTo(l.target.x, l.target.y);
+      if (isHovered) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 1;
+      } else {
+        ctx.strokeStyle = hoveredNode ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.06)';
+        ctx.lineWidth = 0.5;
+      }
+      ctx.stroke();
+    });
+  }
+
+  // Nodes — outlined circles (Nitin Sangwan style)
+  nodes.forEach(n => {
+    const isHovered = n === hoveredNode;
+    const isConnected = hoveredNode && adjacency[hoveredNode.id] && adjacency[hoveredNode.id].has(n.id);
+    const dimmed = hoveredNode && !isHovered && !isConnected;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+
+    if (isHovered) {
+      // Filled on hover
+      ctx.fillStyle = n.color;
+      ctx.fill();
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (isConnected) {
+      ctx.fillStyle = n.color + '30';
+      ctx.fill();
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else if (dimmed) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    } else {
+      // Default: outlined, not filled
+      ctx.strokeStyle = n.color + '60';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Tiny dot at center
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = n.color + '80';
+      ctx.fill();
+    }
+
+    // Labels
+    if (isHovered || isConnected || showLabels) {
+      const fontSize = 10 / zoom;
+      ctx.fillStyle = dimmed ? 'rgba(0,0,0,0.08)' : (isHovered ? '#1A1A1A' : 'rgba(0,0,0,0.4)');
+      ctx.font = (isHovered ? 'bold ' : '') + fontSize + 'px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.title, n.x, n.y - n.radius - 5);
+    }
+  });
+
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

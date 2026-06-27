@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 — Fractal Branching (Radial Dendrogram)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #controls {
+    position: fixed; top: 24px; right: 24px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    color: #F2F2F0; padding: 8px 14px; border-radius: 6px; font-size: 12px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(255,255,255,0.12); }
+  .btn.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>07 — Fractal Branching</h2>
+  Radial dendrogram. Center = root atoms. Branches spread outward<br>
+  following primary links. Click any node to re-root the tree.
+</div>
+<div id="controls">
+  <button class="btn" onclick="reRoot(1)">Root: #001 Compounding</button>
+  <button class="btn" onclick="reRoot(49)">Root: #049 Impossible Wall</button>
+  <button class="btn" onclick="reRoot(57)">Root: #057 Hebrew Epistemic</button>
+  <button class="btn" onclick="reRoot(13)">Root: #013 Paul's Epistemology</button>
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W = window.innerWidth, H = window.innerHeight, dpr = window.devicePixelRatio || 1;
+let hoveredNode = null;
+let rootId = 1;
+let treeNodes = [];
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  buildTree();
+}
+
+// Build adjacency from all edges
+const adj = {};
+atoms.forEach(a => adj[a.id] = []);
+edges.forEach(e => {
+  adj[e.source].push(e.target);
+  adj[e.target].push(e.source);
+});
+
+const atomMap = {};
+atoms.forEach(a => atomMap[a.id] = a);
+
+function buildTree() {
+  // BFS from root to build a tree
+  const visited = new Set();
+  const queue = [{ id: rootId, depth: 0, parentAngle: null, angleStart: 0, angleEnd: Math.PI * 2 }];
+  visited.add(rootId);
+  treeNodes = [];
+  const cx = W / 2, cy = H / 2;
+  const maxR = Math.min(W, H) * 0.44;
+  const maxDepth = 8;
+
+  while (queue.length > 0) {
+    const item = queue.shift();
+    const atom = atomMap[item.id];
+    if (!atom) continue;
+
+    const depth = item.depth;
+    const r = depth === 0 ? 0 : (depth / maxDepth) * maxR;
+    const angle = (item.angleStart + item.angleEnd) / 2;
+
+    const node = {
+      ...atom,
+      depth,
+      x: cx, y: cy, // current animated position
+      tx: cx + Math.cos(angle) * r,
+      ty: cy + Math.sin(angle) * r,
+      angle,
+      radius: Math.max(3, 9 - depth),
+      color: getDomainColor(atom.domain),
+      parentId: item.parentId || null,
+    };
+    treeNodes.push(node);
+
+    // Find unvisited children
+    const children = adj[item.id].filter(c => !visited.has(c));
+    children.forEach(c => visited.add(c));
+
+    if (children.length > 0) {
+      const sliceSize = (item.angleEnd - item.angleStart) / children.length;
+      children.forEach((childId, i) => {
+        queue.push({
+          id: childId,
+          depth: depth + 1,
+          parentId: item.id,
+          angleStart: item.angleStart + sliceSize * i,
+          angleEnd: item.angleStart + sliceSize * (i + 1),
+        });
+      });
+    }
+  }
+}
+
+function reRoot(id) {
+  rootId = id;
+  buildTree();
+}
+
+resize();
+window.addEventListener('resize', resize);
+
+canvas.addEventListener('mousemove', e => {
+  let closest = null, closestDist = Infinity;
+  treeNodes.forEach(n => {
+    const dx = n.x - e.clientX, dy = n.y - e.clientY;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < n.radius + 12 && d < closestDist) { closest = n; closestDist = d; }
+  });
+  hoveredNode = closest;
+  if (closest) {
+    document.getElementById('tt-title').textContent = '#' + closest.id + ' ' + closest.title;
+    document.getElementById('tt-level').textContent = closest.level + ' \u00B7 ' + closest.domain + ' \u00B7 depth ' + closest.depth;
+    document.getElementById('tt-claim').textContent = closest.claim;
+    tooltip.classList.add('visible');
+    tooltip.style.left = Math.min(e.clientX + 16, W - 340) + 'px';
+    tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'default';
+  }
+});
+
+canvas.addEventListener('click', e => {
+  if (hoveredNode) {
+    reRoot(hoveredNode.id);
+  }
+});
+
+// Build node lookup for parent edges
+function getNodeById(id) {
+  return treeNodes.find(n => n.id === id);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const cx = W/2, cy = H/2;
+  const maxR = Math.min(W, H) * 0.44;
+
+  // Depth ring guides
+  for (let d = 1; d <= 6; d++) {
+    const r = (d / 8) * maxR;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Animate positions
+  treeNodes.forEach(n => {
+    n.x += (n.tx - n.x) * 0.06;
+    n.y += (n.ty - n.y) * 0.06;
+  });
+
+  // Draw branches (parent-child edges as organic curves)
+  treeNodes.forEach(n => {
+    if (!n.parentId) return;
+    const parent = getNodeById(n.parentId);
+    if (!parent) return;
+
+    const isHovered = hoveredNode && (n === hoveredNode || parent === hoveredNode);
+
+    ctx.beginPath();
+    // Bezier curve for organic branching feel
+    const midX = (parent.x + n.x) / 2;
+    const midY = (parent.y + n.y) / 2;
+    // Control point pulls toward center for radial flow
+    const cpX = midX + (cx - midX) * 0.15;
+    const cpY = midY + (cy - midY) * 0.15;
+    ctx.moveTo(parent.x, parent.y);
+    ctx.quadraticCurveTo(cpX, cpY, n.x, n.y);
+
+    if (isHovered) {
+      ctx.strokeStyle = n.color + '60';
+      ctx.lineWidth = 2;
+    } else {
+      // Thinner at deeper levels
+      const alpha = Math.max(0.03, 0.12 - n.depth * 0.015);
+      ctx.strokeStyle = 'rgba(255,255,255,' + alpha + ')';
+      ctx.lineWidth = Math.max(0.3, 2 - n.depth * 0.25);
+    }
+    ctx.stroke();
+  });
+
+  // Draw nodes
+  treeNodes.forEach(n => {
+    const isHovered = n === hoveredNode;
+    const isParent = hoveredNode && hoveredNode.parentId === n.id;
+    const isChild = hoveredNode && n.parentId === hoveredNode.id;
+    const dimmed = hoveredNode && !isHovered && !isParent && !isChild;
+
+    if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius * 4, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 4);
+      grad.addColorStop(0, n.color + '25');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+    ctx.fillStyle = dimmed ? n.color + '10' : n.color + (isHovered ? 'FF' : 'BB');
+    ctx.fill();
+
+    // Labels
+    if (isHovered || isParent || isChild) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = (isHovered ? 'bold ' : '') + '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.title, n.x, n.y - n.radius - 8);
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

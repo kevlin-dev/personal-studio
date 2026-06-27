@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 — Domain Galaxies</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #debug { position: fixed; bottom: 8px; left: 8px; font-size: 10px; opacity: 0.3; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>04 — Domain Galaxies</h2>
+  Atoms gravitate toward their domain center.<br>
+  Drag nodes. Hover for connections.
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<div id="debug"></div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+(function() {
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  var tooltip = document.getElementById('tooltip');
+  var dbg = document.getElementById('debug');
+  var W, H, dpr;
+  var hoveredNode = null;
+  var dragging = null;
+
+  // Fixed 6-char hex colors per primary domain
+  var GALAXY_COLORS = {
+    "Foundation":                "#E8C547",
+    "Knowledge Work":            "#5B8DEF",
+    "Biblical Theology":         "#C75D5D",
+    "Theology":                  "#C75D5D",
+    "Philosophy":                "#9B6FD4",
+    "Identity":                  "#4ECDC4",
+    "Content & Communication":   "#F2994A",
+    "Curriculum Design":         "#6BCB77",
+    "Design":                    "#FF6B9D",
+    "Epistemology":              "#FF6B9D",
+    "Art History":               "#FF6B9D",
+    "HCI":                       "#C75D5D",
+  };
+
+  function getColor(domain) {
+    var d = domain.split(" / ")[0];
+    return GALAXY_COLORS[d] || "#999999";
+  }
+
+  function hexToRgba(hex, alpha) {
+    var r = parseInt(hex.slice(1,3), 16);
+    var g = parseInt(hex.slice(3,5), 16);
+    var b = parseInt(hex.slice(5,7), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
+  }
+
+  // Get unique primary domains
+  var domainSet = {};
+  atoms.forEach(function(a) {
+    var d = a.domain.split(" / ")[0];
+    domainSet[d] = true;
+  });
+  var domainList = Object.keys(domainSet);
+
+  // Centroids
+  var centroids = {};
+  function calcCentroids() {
+    var rad = Math.min(W, H) * 0.28;
+    domainList.forEach(function(d, i) {
+      var angle = (i / domainList.length) * Math.PI * 2 - Math.PI / 2;
+      centroids[d] = {
+        x: W / 2 + Math.cos(angle) * rad,
+        y: H / 2 + Math.sin(angle) * rad
+      };
+    });
+  }
+
+  // Adjacency
+  var adj = {};
+  atoms.forEach(function(a) { adj[a.id] = {}; });
+  edges.forEach(function(e) {
+    if (adj[e.source]) adj[e.source][e.target] = true;
+    if (adj[e.target]) adj[e.target][e.source] = true;
+  });
+
+  // Connection count
+  var cc = {};
+  atoms.forEach(function(a) { cc[a.id] = 0; });
+  edges.forEach(function(e) { cc[e.source] = (cc[e.source]||0) + 1; cc[e.target] = (cc[e.target]||0) + 1; });
+
+  // Nodes
+  var nodes = [];
+  var nodeById = {};
+
+  function initNodes() {
+    nodes = [];
+    nodeById = {};
+    atoms.forEach(function(a) {
+      var d = a.domain.split(" / ")[0];
+      var c = centroids[d] || { x: W/2, y: H/2 };
+      var col = getColor(a.domain);
+      var n = {
+        id: a.id,
+        title: a.title,
+        level: a.level,
+        domain: a.domain,
+        claim: a.claim,
+        primaryDomain: d,
+        x: c.x + (Math.random() - 0.5) * 120,
+        y: c.y + (Math.random() - 0.5) * 120,
+        vx: 0,
+        vy: 0,
+        radius: Math.max(4, Math.min(11, 4 + (cc[a.id] || 0) * 0.5)),
+        color: col,
+      };
+      nodes.push(n);
+      nodeById[a.id] = n;
+    });
+  }
+
+  // Links
+  var links = [];
+  function initLinks() {
+    links = [];
+    edges.forEach(function(e) {
+      var s = nodeById[e.source];
+      var t = nodeById[e.target];
+      if (s && t) links.push({ source: s, target: t });
+    });
+  }
+
+  function setup() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    calcCentroids();
+    if (nodes.length === 0) {
+      initNodes();
+      initLinks();
+    }
+    dbg.textContent = nodes.length + " nodes, " + links.length + " links, " + domainList.length + " domains";
+  }
+  setup();
+  window.addEventListener("resize", setup);
+
+  // Mouse
+  canvas.addEventListener("mousedown", function(e) {
+    var best = null, bestD = Infinity;
+    nodes.forEach(function(n) {
+      var dx = n.x - e.clientX, dy = n.y - e.clientY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < n.radius + 10 && dist < bestD) { best = n; bestD = dist; }
+    });
+    if (best) dragging = best;
+  });
+
+  canvas.addEventListener("mousemove", function(e) {
+    if (dragging) {
+      dragging.x = e.clientX;
+      dragging.y = e.clientY;
+      dragging.vx = 0;
+      dragging.vy = 0;
+    }
+    var best = null, bestD = Infinity;
+    nodes.forEach(function(n) {
+      var dx = n.x - e.clientX, dy = n.y - e.clientY;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < n.radius + 14 && dist < bestD) { best = n; bestD = dist; }
+    });
+    hoveredNode = best;
+    if (best) {
+      document.getElementById("tt-title").textContent = "#" + best.id + " " + best.title;
+      document.getElementById("tt-level").textContent = best.level + " \u00B7 " + best.domain;
+      document.getElementById("tt-claim").textContent = best.claim;
+      tooltip.classList.add("visible");
+      tooltip.style.left = Math.min(e.clientX + 16, W - 340) + "px";
+      tooltip.style.top = Math.min(e.clientY - 10, H - 100) + "px";
+      canvas.style.cursor = "pointer";
+    } else {
+      tooltip.classList.remove("visible");
+      canvas.style.cursor = "default";
+    }
+  });
+
+  canvas.addEventListener("mouseup", function() { dragging = null; });
+
+  // Physics
+  function simulate() {
+    var i, j, a, b, dx, dy, d, force;
+
+    // Repulsion
+    for (i = 0; i < nodes.length; i++) {
+      for (j = i + 1; j < nodes.length; j++) {
+        a = nodes[i]; b = nodes[j];
+        dx = a.x - b.x; dy = a.y - b.y;
+        d = Math.sqrt(dx*dx + dy*dy);
+        if (d < 1) d = 1;
+        if (d > 200) continue;
+        force = 400 / (d * d);
+        a.vx += (dx/d) * force; a.vy += (dy/d) * force;
+        b.vx -= (dx/d) * force; b.vy -= (dy/d) * force;
+      }
+    }
+
+    // Link attraction
+    for (i = 0; i < links.length; i++) {
+      var l = links[i];
+      dx = l.target.x - l.source.x;
+      dy = l.target.y - l.source.y;
+      d = Math.sqrt(dx*dx + dy*dy);
+      if (d < 1) d = 1;
+      force = (d - 60) * 0.003;
+      l.source.vx += (dx/d) * force; l.source.vy += (dy/d) * force;
+      l.target.vx -= (dx/d) * force; l.target.vy -= (dy/d) * force;
+    }
+
+    // Domain gravity + center gravity + damping
+    for (i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n === dragging) continue;
+      var c = centroids[n.primaryDomain];
+      if (c) {
+        n.vx += (c.x - n.x) * 0.007;
+        n.vy += (c.y - n.y) * 0.007;
+      }
+      n.vx += (W/2 - n.x) * 0.0002;
+      n.vy += (H/2 - n.y) * 0.0002;
+      n.vx *= 0.88;
+      n.vy *= 0.88;
+      n.x += n.vx;
+      n.y += n.vy;
+    }
+  }
+
+  // Render
+  function draw() {
+    simulate();
+    ctx.clearRect(0, 0, W, H);
+
+    // Domain nebula halos
+    domainList.forEach(function(d) {
+      var domNodes = nodes.filter(function(n) { return n.primaryDomain === d; });
+      if (domNodes.length === 0) return;
+      var avgX = 0, avgY = 0;
+      domNodes.forEach(function(n) { avgX += n.x; avgY += n.y; });
+      avgX /= domNodes.length; avgY /= domNodes.length;
+      var maxDist = 0;
+      domNodes.forEach(function(n) {
+        var dist = Math.sqrt((n.x-avgX)*(n.x-avgX) + (n.y-avgY)*(n.y-avgY));
+        if (dist > maxDist) maxDist = dist;
+      });
+      var haloR = maxDist + 70;
+      var col = GALAXY_COLORS[d] || "#999999";
+
+      ctx.beginPath();
+      ctx.arc(avgX, avgY, haloR, 0, Math.PI * 2);
+      var grad = ctx.createRadialGradient(avgX, avgY, 0, avgX, avgY, haloR);
+      grad.addColorStop(0, hexToRgba(col, 0.06));
+      grad.addColorStop(0.6, hexToRgba(col, 0.02));
+      grad.addColorStop(1, "transparent");
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Domain label
+      ctx.fillStyle = hexToRgba(col, 0.35);
+      ctx.font = "10px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(d.toUpperCase(), avgX, avgY - haloR + 14);
+    });
+
+    // Edges
+    for (var i = 0; i < links.length; i++) {
+      var l = links[i];
+      var isHov = hoveredNode && (l.source === hoveredNode || l.target === hoveredNode);
+      if (hoveredNode && !isHov) continue;
+
+      ctx.beginPath();
+      ctx.moveTo(l.source.x, l.source.y);
+      ctx.lineTo(l.target.x, l.target.y);
+      if (isHov) {
+        var cross = l.source.primaryDomain !== l.target.primaryDomain;
+        ctx.strokeStyle = cross ? "rgba(242,153,74,0.35)" : "rgba(255,255,255,0.2)";
+        ctx.lineWidth = cross ? 2 : 1.5;
+      } else {
+        ctx.strokeStyle = "rgba(255,255,255,0.025)";
+        ctx.lineWidth = 0.5;
+      }
+      ctx.stroke();
+    }
+
+    // Nodes
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var isHov = (n === hoveredNode);
+      var isConn = hoveredNode && adj[hoveredNode.id] && adj[hoveredNode.id][n.id];
+      var dimmed = hoveredNode && !isHov && !isConn;
+
+      // Glow
+      if (isHov) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius * 3.5, 0, Math.PI * 2);
+        var grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 3.5);
+        grad.addColorStop(0, hexToRgba(n.color, 0.25));
+        grad.addColorStop(1, "transparent");
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+
+      // Circle
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+      if (dimmed) {
+        ctx.fillStyle = hexToRgba(n.color, 0.07);
+      } else if (isHov) {
+        ctx.fillStyle = n.color;
+      } else {
+        ctx.fillStyle = hexToRgba(n.color, 0.8);
+      }
+      ctx.fill();
+
+      // Label
+      if (isHov || isConn) {
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.font = (isHov ? "bold " : "") + "11px -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(n.title, n.x, n.y - n.radius - 8);
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

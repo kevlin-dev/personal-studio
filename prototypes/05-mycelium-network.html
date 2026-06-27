@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 — Mycelium Network (Organic Growth)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #pulse-info {
+    position: fixed; bottom: 24px; right: 24px; z-index: 10;
+    font-size: 12px; opacity: 0.2; text-align: right; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>05 — Mycelium Network</h2>
+  Organic, root-like network. Thin tendrils connect ideas.<br>
+  Nutrients (activity) pulse through the connections.<br>
+  The most connected nodes are the fruiting bodies.
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<div id="pulse-info">
+  connections pulse with life<br>
+  bright nodes = high connectivity
+</div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W, H, dpr;
+let hoveredNode = null;
+let time = 0;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+const adjacency = {};
+atoms.forEach(a => adjacency[a.id] = new Set());
+edges.forEach(e => { adjacency[e.source].add(e.target); adjacency[e.target].add(e.source); });
+
+const connCount = {};
+atoms.forEach(a => connCount[a.id] = 0);
+edges.forEach(e => { connCount[e.source]++; connCount[e.target]++; });
+const maxConn = Math.max(...Object.values(connCount));
+
+const nodeMap = {};
+const nodes = atoms.map(a => {
+  const cc = connCount[a.id];
+  const n = {
+    ...a,
+    x: W/2 + (Math.random() - 0.5) * W * 0.7,
+    y: H/2 + (Math.random() - 0.5) * H * 0.7,
+    vx: 0, vy: 0,
+    radius: 2 + (cc / maxConn) * 8,
+    color: getDomainColor(a.domain),
+    connections: cc,
+    brightness: 0.3 + (cc / maxConn) * 0.7,
+  };
+  nodeMap[a.id] = n;
+  return n;
+});
+
+const linkObjs = edges.map((e, i) => ({
+  source: nodeMap[e.source], target: nodeMap[e.target],
+  pulseOffset: Math.random() * Math.PI * 2,
+  index: i,
+}));
+
+// Physics — very spread out, organic feel
+function simulate() {
+  const REPULSION = 1200;
+  const LINK_STR = 0.002;
+  const LINK_DIST = 120;
+  const DAMPING = 0.9;
+  const CENTER = 0.0003;
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d = Math.sqrt(dx*dx + dy*dy) || 1;
+      if (d > 300) continue;
+      const force = REPULSION / (d * d);
+      a.vx += (dx/d) * force; a.vy += (dy/d) * force;
+      b.vx -= (dx/d) * force; b.vy -= (dy/d) * force;
+    }
+  }
+
+  linkObjs.forEach(l => {
+    const dx = l.target.x - l.source.x;
+    const dy = l.target.y - l.source.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = (d - LINK_DIST) * LINK_STR;
+    l.source.vx += (dx/d) * force; l.source.vy += (dy/d) * force;
+    l.target.vx -= (dx/d) * force; l.target.vy -= (dy/d) * force;
+  });
+
+  nodes.forEach(n => {
+    n.vx += (W/2 - n.x) * CENTER;
+    n.vy += (H/2 - n.y) * CENTER;
+    n.vx *= DAMPING; n.vy *= DAMPING;
+    n.x += n.vx; n.y += n.vy;
+  });
+}
+
+canvas.addEventListener('mousemove', e => {
+  let closest = null, closestDist = Infinity;
+  nodes.forEach(n => {
+    const dx = n.x - e.clientX, dy = n.y - e.clientY;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < n.radius + 15 && d < closestDist) { closest = n; closestDist = d; }
+  });
+  hoveredNode = closest;
+  if (closest) {
+    document.getElementById('tt-title').textContent = `#${closest.id} ${closest.title}`;
+    document.getElementById('tt-level').textContent = `${closest.level} · ${closest.domain} · ${closest.connections} connections`;
+    document.getElementById('tt-claim').textContent = closest.claim;
+    tooltip.classList.add('visible');
+    tooltip.style.left = Math.min(e.clientX + 16, W - 340) + 'px';
+    tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'default';
+  }
+});
+
+function draw() {
+  time += 0.015;
+  simulate();
+  ctx.clearRect(0, 0, W, H);
+
+  // Draw mycelium tendrils (curved, thin, pulsing)
+  linkObjs.forEach(l => {
+    const isHovered = hoveredNode && (l.source === hoveredNode || l.target === hoveredNode);
+    const dimmed = hoveredNode && !isHovered;
+
+    const sx = l.source.x, sy = l.source.y;
+    const tx = l.target.x, ty = l.target.y;
+    const dx = tx - sx, dy = ty - sy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+
+    // Organic curve — offset perpendicular to the line
+    const perpX = -dy / dist;
+    const perpY = dx / dist;
+    const curveAmount = Math.sin(l.pulseOffset + time * 0.5) * dist * 0.08;
+    const mx = (sx + tx) / 2 + perpX * curveAmount;
+    const my = (sy + ty) / 2 + perpY * curveAmount;
+
+    // Pulse animation — light traveling along the tendril
+    const pulse = (Math.sin(time * 2 + l.pulseOffset) + 1) / 2;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(mx, my, tx, ty);
+
+    if (isHovered) {
+      ctx.strokeStyle = l.source.color + '60';
+      ctx.lineWidth = 2;
+    } else if (dimmed) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.01})`;
+      ctx.lineWidth = 0.3;
+    } else {
+      const alpha = 0.03 + pulse * 0.04;
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = 0.5 + pulse * 0.5;
+    }
+    ctx.stroke();
+
+    // Pulse dot traveling along the tendril (only for non-dimmed, non-hovered)
+    if (!dimmed && !isHovered) {
+      const t = (time * 0.3 + l.pulseOffset) % 1;
+      const px = (1-t)*(1-t)*sx + 2*(1-t)*t*mx + t*t*tx;
+      const py = (1-t)*(1-t)*sy + 2*(1-t)*t*my + t*t*ty;
+      ctx.beginPath();
+      ctx.arc(px, py, 1, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${0.1 + pulse * 0.15})`;
+      ctx.fill();
+    }
+  });
+
+  // Draw nodes (fruiting bodies)
+  nodes.forEach(n => {
+    const isHovered = n === hoveredNode;
+    const isConnected = hoveredNode && adjacency[hoveredNode.id].has(n.id);
+    const dimmed = hoveredNode && !isHovered && !isConnected;
+
+    // Breathing animation
+    const breathe = 1 + Math.sin(time * 1.5 + n.id * 0.7) * 0.08;
+    const r = n.radius * breathe;
+
+    // Outer glow for high-connection nodes
+    if (n.connections > 5 && !dimmed) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r * 3, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 3);
+      grad.addColorStop(0, n.color + '15');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Strong glow for hovered
+    if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r * 5, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 5);
+      grad.addColorStop(0, n.color + '30');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Core
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    if (dimmed) {
+      ctx.fillStyle = n.color + '10';
+    } else {
+      const b = Math.round(n.brightness * 255).toString(16).padStart(2, '0');
+      ctx.fillStyle = n.color + (isHovered ? 'FF' : b);
+    }
+    ctx.fill();
+
+    // Inner bright point for high-connection nodes
+    if (n.connections > 8 && !dimmed) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF40';
+      ctx.fill();
+    }
+
+    if (isHovered || isConnected) {
+      ctx.fillStyle = dimmed ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.85)';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.title, n.x, n.y - r - 10);
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

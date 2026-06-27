@@ -7,7 +7,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'Kevin Lin — Creative Technologist' } = Astro.props;
+const { title, description = 'First-time father. September deadline. Collaborating with AI to build a life, not just a product.' } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://kevinlin.studio');
 ---
 
@@ -18,6 +18,11 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://kevinlin
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonicalURL} />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap" rel="stylesheet" />
 
     <title>{title}</title>
     <meta name="description" content={description} />
@@ -41,14 +46,36 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? 'https://kevinlin
           "@type": "Person",
           "@id": "https://kevinlin.studio/#person",
           "name": "Kevin Lin",
-          "jobTitle": "Creative Technologist",
-          "url": "https://kevinlin.studio"
+          "jobTitle": "Designer and Developer",
+          "url": "https://kevinlin.studio",
+          "image": "https://kevinlin.studio/images/kevin-lin.jpg",
+          "description": "Kevin Lin is a designer and developer based in Vancouver, Canada. He builds software (watchOS apps, web tools), studies knowledge systems, and writes about faith, formation, and technology.",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Vancouver",
+            "addressRegion": "BC",
+            "addressCountry": "CA"
+          },
+          "sameAs": [
+            "https://github.com/kevlin-dev",
+            "https://www.linkedin.com/in/kevin-lin-0b034665/"
+          ],
+          "knowsAbout": [
+            "Product Design",
+            "Software Development",
+            "AI Collaboration",
+            "Knowledge Systems",
+            "Personal Knowledge Management",
+            "watchOS App Development",
+            "Faith and Technology",
+            "Formation Design"
+          ]
         },
         {
           "@type": "WebSite",
           "@id": "https://kevinlin.studio/#website",
           "url": "https://kevinlin.studio",
-          "name": "Kevin Lin Studio",
+          "name": "Kevin Lin",
           "publisher": { "@id": "https://kevinlin.studio/#person" }
         }
       ]

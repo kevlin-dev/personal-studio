@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 — Phyllotaxis Spiral (Golden Angle Growth)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #legend {
+    position: fixed; bottom: 24px; left: 24px; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: 8px; max-width: 400px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.5; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  #growth-label {
+    position: fixed; bottom: 24px; right: 24px; z-index: 10;
+    font-size: 12px; opacity: 0.3; text-align: right; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>03 — Phyllotaxis Spiral</h2>
+  Golden angle (137.5°) layout. Atom #001 at center, #111 at the edge.<br>
+  Nature's most efficient packing pattern. The brain grows outward.<br>
+  Hover to see connections radiating from any node.
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<div id="legend"></div>
+<div id="growth-label">
+  center = earliest atoms<br>
+  edge = newest growth
+</div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W, H, dpr;
+let hoveredNode = null;
+let time = 0;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+const GOLDEN_ANGLE = 137.508 * (Math.PI / 180); // ~2.3999 radians
+const adjacency = {};
+atoms.forEach(a => adjacency[a.id] = new Set());
+edges.forEach(e => { adjacency[e.source].add(e.target); adjacency[e.target].add(e.source); });
+
+const nodeMap = {};
+const nodes = atoms.map((a, i) => {
+  const n = {
+    ...a,
+    index: i,
+    radius: levelToNum(a.level) === 3 ? 9 : levelToNum(a.level) === 1 ? 4 : 6,
+    color: getDomainColor(a.domain),
+    x: 0, y: 0,
+  };
+  nodeMap[a.id] = n;
+  return n;
+});
+
+const linkObjs = edges.map(e => ({ source: nodeMap[e.source], target: nodeMap[e.target] }));
+
+function getPositions() {
+  const cx = W / 2, cy = H / 2;
+  const scale = Math.min(W, H) * 0.038;
+
+  nodes.forEach((n, i) => {
+    const r = scale * Math.sqrt(i + 1);
+    const theta = (i + 1) * GOLDEN_ANGLE;
+    // Add very subtle breathing motion
+    const breathe = Math.sin(time * 0.001 + i * 0.3) * 2;
+    n.x = cx + Math.cos(theta) * (r + breathe);
+    n.y = cy + Math.sin(theta) * (r + breathe);
+  });
+}
+
+canvas.addEventListener('mousemove', e => {
+  let closest = null, closestDist = Infinity;
+  nodes.forEach(n => {
+    const dx = n.x - e.clientX, dy = n.y - e.clientY;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < n.radius + 12 && d < closestDist) { closest = n; closestDist = d; }
+  });
+  hoveredNode = closest;
+  if (closest) {
+    document.getElementById('tt-title').textContent = `#${closest.id} ${closest.title}`;
+    document.getElementById('tt-level').textContent = `${closest.level} · ${closest.domain}`;
+    document.getElementById('tt-claim').textContent = closest.claim;
+    tooltip.classList.add('visible');
+    tooltip.style.left = Math.min(e.clientX + 16, W - 340) + 'px';
+    tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'default';
+  }
+});
+
+function draw() {
+  time++;
+  ctx.clearRect(0, 0, W, H);
+  getPositions();
+
+  // Background: very subtle golden spiral guide
+  ctx.save();
+  ctx.globalAlpha = 0.02;
+  ctx.beginPath();
+  const cx = W/2, cy = H/2;
+  for (let t = 0; t < 40; t += 0.02) {
+    const r = Math.min(W,H) * 0.038 * Math.sqrt(t * 5);
+    const theta = t * 5 * GOLDEN_ANGLE;
+    const x = cx + Math.cos(theta) * r;
+    const y = cy + Math.sin(theta) * r;
+    if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = '#F2F2F0';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw connections
+  linkObjs.forEach(l => {
+    const isHovered = hoveredNode && (l.source === hoveredNode || l.target === hoveredNode);
+    if (hoveredNode && !isHovered) return;
+
+    ctx.beginPath();
+    // Curved connections
+    const mx = (l.source.x + l.target.x) / 2;
+    const my = (l.source.y + l.target.y) / 2;
+    const dx = l.target.x - l.source.x;
+    const dy = l.target.y - l.source.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const curve = Math.min(dist * 0.15, 30);
+    const cpx = mx - dy/dist * curve;
+    const cpy = my + dx/dist * curve;
+    ctx.moveTo(l.source.x, l.source.y);
+    ctx.quadraticCurveTo(cpx, cpy, l.target.x, l.target.y);
+    ctx.strokeStyle = isHovered ? l.source.color + '50' : 'rgba(255,255,255,0.025)';
+    ctx.lineWidth = isHovered ? 1.5 : 0.5;
+    ctx.stroke();
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    const isHovered = n === hoveredNode;
+    const isConnected = hoveredNode && adjacency[hoveredNode.id].has(n.id);
+    const dimmed = hoveredNode && !isHovered && !isConnected;
+
+    // Glow
+    if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius * 4, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 4);
+      grad.addColorStop(0, n.color + '30');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Star-like twinkle effect
+    const twinkle = 0.7 + 0.3 * Math.sin(time * 0.02 + n.index * 1.7);
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius * (isHovered ? 1.3 : 1), 0, Math.PI * 2);
+    const alpha = dimmed ? '15' : isHovered ? 'FF' : Math.round(twinkle * 180).toString(16).padStart(2, '0');
+    ctx.fillStyle = n.color + alpha;
+    ctx.fill();
+
+    if (isHovered || isConnected) {
+      ctx.fillStyle = dimmed ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.85)';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`#${n.id} ${n.title}`, n.x, n.y - n.radius - 8);
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+
+// Legend
+const domainList = [...new Set(atoms.map(a => getPrimaryDomain(a.domain)))];
+const legendEl = document.getElementById('legend');
+domainList.forEach(d => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<div class="legend-dot" style="background:${getDomainColor(d)}"></div>${d}`;
+  legendEl.appendChild(item);
+});
+</script>
+</body>
+</html>

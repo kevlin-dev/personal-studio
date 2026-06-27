@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 — Concentric Rings (Tree Rings / Dendrochronology)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 320px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .claim { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #controls {
+    position: fixed; top: 24px; right: 24px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    color: #F2F2F0; padding: 8px 14px; border-radius: 6px; font-size: 12px;
+    cursor: pointer; letter-spacing: 0.02em; transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(255,255,255,0.12); }
+  .btn.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+  #legend {
+    position: fixed; bottom: 24px; left: 24px; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: 8px; max-width: 400px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.5; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>02 — Concentric Rings</h2>
+  Tree ring layout. Inner rings = deeper formation (L3).<br>
+  Outer rings = newer knowledge (L1). Toggle views.
+</div>
+<div id="controls">
+  <button class="btn active" id="btn-level" onclick="setMode('level')">Sort by Level</button>
+  <button class="btn" id="btn-domain" onclick="setMode('domain')">Sort by Domain</button>
+  <button class="btn" id="btn-chrono" onclick="setMode('chronological')">Sort by Birth Order</button>
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="level" id="tt-level"></div>
+  <div class="claim" id="tt-claim"></div>
+</div>
+<div id="legend"></div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W = window.innerWidth, H = window.innerHeight, dpr = window.devicePixelRatio || 1;
+let mode = 'level';
+let hoveredNode = null;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  computePositions();
+}
+
+// Create nodes with valid initial positions
+const nodeMap = {};
+const nodes = atoms.map(a => {
+  const n = {
+    ...a,
+    x: window.innerWidth / 2 + (Math.random() - 0.5) * 20,
+    y: window.innerHeight / 2 + (Math.random() - 0.5) * 20,
+    tx: window.innerWidth / 2,
+    ty: window.innerHeight / 2,
+    radius: levelToNum(a.level) === 3 ? 8 : levelToNum(a.level) === 1 ? 4 : 5.5,
+    color: getDomainColor(a.domain),
+  };
+  nodeMap[a.id] = n;
+  return n;
+});
+
+const links = edges.map(e => ({ source: nodeMap[e.source], target: nodeMap[e.target], type: e.type }));
+const adjacency = {};
+atoms.forEach(a => adjacency[a.id] = new Set());
+edges.forEach(e => { adjacency[e.source].add(e.target); adjacency[e.target].add(e.source); });
+
+function computePositions() {
+  const cx = W / 2, cy = H / 2;
+  const maxR = Math.min(W, H) * 0.42;
+
+  if (mode === 'level') {
+    const rings = { 3: [], 2: [], 1: [] };
+    nodes.forEach(n => rings[levelToNum(n.level)].push(n));
+    const ringRadii = { 3: maxR * 0.15, 2: maxR * 0.5, 1: maxR * 0.85 };
+    Object.entries(rings).forEach(([level, group]) => {
+      const r = ringRadii[level];
+      group.forEach((n, i) => {
+        const angle = (i / group.length) * Math.PI * 2 - Math.PI / 2;
+        n.tx = cx + Math.cos(angle) * r;
+        n.ty = cy + Math.sin(angle) * r;
+      });
+    });
+  } else if (mode === 'domain') {
+    const domainGroups = {};
+    nodes.forEach(n => {
+      const d = getPrimaryDomain(n.domain);
+      if (!domainGroups[d]) domainGroups[d] = [];
+      domainGroups[d].push(n);
+    });
+    const domainNames = Object.keys(domainGroups);
+    domainNames.forEach((d, di) => {
+      const angle = (di / domainNames.length) * Math.PI * 2 - Math.PI / 2;
+      const group = domainGroups[d];
+      const sectorCx = cx + Math.cos(angle) * maxR * 0.5;
+      const sectorCy = cy + Math.sin(angle) * maxR * 0.5;
+      group.forEach((n, ni) => {
+        const subAngle = (ni / group.length) * Math.PI * 2;
+        const subR = Math.min(maxR * 0.25, 20 + group.length * 6);
+        n.tx = sectorCx + Math.cos(subAngle) * subR * (0.3 + ni / group.length * 0.7);
+        n.ty = sectorCy + Math.sin(subAngle) * subR * (0.3 + ni / group.length * 0.7);
+      });
+    });
+  } else if (mode === 'chronological') {
+    nodes.forEach((n, i) => {
+      const t = i / nodes.length;
+      const angle = t * Math.PI * 8;
+      const r = maxR * 0.08 + t * maxR * 0.85;
+      n.tx = cx + Math.cos(angle) * r;
+      n.ty = cy + Math.sin(angle) * r;
+    });
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + (m === 'chronological' ? 'chrono' : m)).classList.add('active');
+  computePositions();
+}
+
+resize();
+window.addEventListener('resize', resize);
+
+canvas.addEventListener('mousemove', e => {
+  let closest = null, closestDist = Infinity;
+  nodes.forEach(n => {
+    const dx = n.x - e.clientX, dy = n.y - e.clientY;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < n.radius + 12 && d < closestDist) { closest = n; closestDist = d; }
+  });
+  hoveredNode = closest;
+  if (closest) {
+    document.getElementById('tt-title').textContent = '#' + closest.id + ' ' + closest.title;
+    document.getElementById('tt-level').textContent = closest.level + ' \u00B7 ' + closest.domain;
+    document.getElementById('tt-claim').textContent = closest.claim;
+    tooltip.classList.add('visible');
+    tooltip.style.left = Math.min(e.clientX + 16, W - 340) + 'px';
+    tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'default';
+  }
+});
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const cx = W/2, cy = H/2;
+  const maxR = Math.min(W, H) * 0.42;
+
+  // Ring guides
+  if (mode === 'level') {
+    [0.15, 0.5, 0.85].forEach((r, i) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, maxR * r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(['L3 Constituted', 'L2 Working', 'L1 Encountered'][i], cx, cy - maxR * r - 10);
+    });
+  }
+
+  // Animate
+  nodes.forEach(n => {
+    n.x += (n.tx - n.x) * 0.08;
+    n.y += (n.ty - n.y) * 0.08;
+  });
+
+  // Edges
+  links.forEach(l => {
+    const isHovered = hoveredNode && (l.source === hoveredNode || l.target === hoveredNode);
+    if (!hoveredNode || isHovered) {
+      ctx.beginPath();
+      const midX = (l.source.x + l.target.x) / 2;
+      const midY = (l.source.y + l.target.y) / 2;
+      const dx = l.target.x - l.source.x;
+      const dy = l.target.y - l.source.y;
+      ctx.moveTo(l.source.x, l.source.y);
+      ctx.quadraticCurveTo(midX - dy * 0.1, midY + dx * 0.1, l.target.x, l.target.y);
+      ctx.strokeStyle = isHovered ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.03)';
+      ctx.lineWidth = isHovered ? 1.5 : 0.5;
+      ctx.stroke();
+    }
+  });
+
+  // Nodes
+  nodes.forEach(n => {
+    const isHovered = n === hoveredNode;
+    const isConnected = hoveredNode && adjacency[hoveredNode.id] && adjacency[hoveredNode.id].has(n.id);
+    const dimmed = hoveredNode && !isHovered && !isConnected;
+
+    if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius * 3.5, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 3.5);
+      grad.addColorStop(0, n.color + '25');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+    ctx.fillStyle = dimmed ? n.color + '15' : n.color + (isHovered ? 'FF' : 'BB');
+    ctx.fill();
+
+    if (isHovered || isConnected) {
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.title, n.x, n.y - n.radius - 8);
+    }
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+
+// Legend
+const domainList = [...new Set(atoms.map(a => getPrimaryDomain(a.domain)))];
+const legendEl = document.getElementById('legend');
+domainList.forEach(d => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = '<div class="legend-dot" style="background:' + getDomainColor(d) + '"></div>' + d;
+  legendEl.appendChild(item);
+});
+</script>
+</body>
+</html>

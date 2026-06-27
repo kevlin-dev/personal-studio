@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Graph Visualization — Prototype Gallery</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0A0A0A; color: #F2F2F0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 80px 6vw;
+  }
+  h1 {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 15px; opacity: 0.4; margin-bottom: 48px; max-width: 600px; line-height: 1.6;
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 24px;
+  }
+  .card {
+    background: #141414; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 28px;
+    transition: border-color 0.2s, transform 0.2s;
+    text-decoration: none; color: inherit; display: block;
+  }
+  .card:hover {
+    border-color: rgba(255,255,255,0.15);
+    transform: translateY(-2px);
+  }
+  .card h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .card .tag {
+    display: inline-block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; padding: 3px 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.06); margin-bottom: 12px;
+  }
+  .card p { font-size: 14px; line-height: 1.6; opacity: 0.5; }
+  .card .metaphor { color: #C8B89A; font-size: 13px; margin-top: 12px; font-style: italic; opacity: 0.7; }
+  .data-note {
+    margin-top: 48px; padding: 20px 24px;
+    background: #141414; border-radius: 8px;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  .data-note strong { opacity: 0.7; }
+</style>
+</head>
+<body>
+  <h1>Knowledge Graph — Prototype Gallery</h1>
+  <p class="subtitle">
+    Five different visualization mechanics for 111 atoms and their connections.
+    Same data, different spatial metaphors. Open each to interact.
+  </p>
+
+  <div class="grid">
+    <a class="card" href="01-force-constellation.html">
+      <span class="tag">Classic</span>
+      <h2>01 — Force Constellation</h2>
+      <p>Standard force-directed graph. Nodes repel, edges attract. Clusters emerge naturally from connection density. Drag nodes, zoom, hover for details.</p>
+      <div class="metaphor">Stars held in gravitational balance</div>
+    </a>
+
+    <a class="card" href="02-concentric-rings.html">
+      <span class="tag">Tree Rings</span>
+      <h2>02 — Concentric Rings</h2>
+      <p>Dendrochronology layout. Inner rings = deeper formation (L3). Outer rings = newer knowledge (L1). Toggle between level, domain, and chronological views.</p>
+      <div class="metaphor">Cross-section of a growing mind</div>
+    </a>
+
+    <a class="card" href="03-phyllotaxis-spiral.html">
+      <span class="tag">Golden Ratio</span>
+      <h2>03 — Phyllotaxis Spiral</h2>
+      <p>Golden angle (137.5°) packing — the sunflower pattern. Atom #001 at center, newest at edge. Nature's most efficient arrangement. Subtle breathing animation.</p>
+      <div class="metaphor">A sunflower head of knowledge</div>
+    </a>
+
+    <a class="card" href="04-domain-galaxies.html">
+      <span class="tag">Organic Clustering</span>
+      <h2>04 — Domain Galaxies</h2>
+      <p>Atoms gravitate toward their domain. Cross-domain atoms orbit between clusters. Nebula halos show domain territory. Drag nodes between galaxies.</p>
+      <div class="metaphor">Galaxy clusters in a knowledge universe</div>
+    </a>
+
+    <a class="card" href="05-mycelium-network.html">
+      <span class="tag">Living Network</span>
+      <h2>05 — Mycelium Network</h2>
+      <p>Organic root-like network with curved tendrils and pulsing nutrient flow. High-connection nodes glow as fruiting bodies. The network breathes.</p>
+      <div class="metaphor">Underground root system bearing fruit</div>
+    </a>
+  </div>
+
+    <a class="card" href="06-light-minimal.html">
+      <span class="tag">Light Theme</span>
+      <h2>06 — Light Minimal</h2>
+      <p>White background, gray outlines, clean. Nitin Sangwan aesthetic. Nodes are outlined circles, not filled. Toggle edges and labels. Zoom and pan.</p>
+      <div class="metaphor">Pencil sketch on white paper</div>
+    </a>
+
+    <a class="card" href="07-fractal-branching.html">
+      <span class="tag">Fractal</span>
+      <h2>07 — Fractal Branching</h2>
+      <p>Radial dendrogram. Pick a root atom — the tree branches outward following connections. Click any node to re-root. Organic curved branches thin at depth.</p>
+      <div class="metaphor">A tree growing from any root</div>
+    </a>
+
+    <a class="card" href="08-seeds-network.html">
+      <span class="tag">Full Ecosystem</span>
+      <h2>08 — Seeds + Atoms Network</h2>
+      <p>445 seeds (outlined) connected to 111 atoms (filled). The full knowledge ecosystem. Filter by type (people, concepts, terms, books, frameworks). 1,285 connections.</p>
+      <div class="metaphor">The entire garden — roots and fruit</div>
+    </a>
+
+    <a class="card" href="09-personal-nav.html" style="border-color: rgba(255,255,255,0.2);">
+      <span class="tag">Personal</span>
+      <h2>09 — Personal Navigation</h2>
+      <p>12 curated nodes, not 111. Light gray background. Monochromatic. Shape-differentiated (triangles, squares, diamonds, pentagons, hexagons). Dual nav: sidebar + graph. Click to expand. A person, not a database.</p>
+      <div class="metaphor">A home, not a data center</div>
+    </a>
+
+    <a class="card" href="10-portrait-graph.html" style="border-color: rgba(255,255,255,0.3);">
+      <span class="tag">Portrait</span>
+      <h2>10 — Portrait Graph</h2>
+      <p>The graph IS the portrait. 350+ dots form Kevin's face. 12 interactive nodes sit within the features. Hover dissolves the face into a constellation. The portrait breathes, blinks, sways. Monochromatic + Rams orange accent. Dual nav sidebar.</p>
+      <div class="metaphor">Who I am is what I think about</div>
+    </a>
+  </div>
+
+  <div class="data-note">
+    <strong>Data:</strong> 111 atoms from Kevin Lin's second brain knowledge system. Connections derived from primary links (each atom's strongest connection) and 37 named clusters from connections-index.md. Domains: Foundation, Knowledge Work, Biblical Theology, Philosophy, Identity, Content & Communication, Curriculum Design, Design. Levels: L1 (encountered), L2 (working), L3 (constituted).
+  </div>
+</body>
+</html>

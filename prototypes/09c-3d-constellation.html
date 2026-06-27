@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09c — 3D Constellation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #EDEDEB;
+    color: #1A1A1A;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    overflow: hidden;
+  }
+
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 240px;
+    background: rgba(237,237,235,0.92);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 28px 28px;
+    z-index: 20;
+    display: flex; flex-direction: column;
+  }
+  #sidebar h1 {
+    font-size: 18px; font-weight: 500;
+    letter-spacing: -0.01em; margin-bottom: 8px;
+  }
+  #sidebar .subtitle {
+    font-size: 12px; color: #888;
+    line-height: 1.5; margin-bottom: 36px;
+  }
+  #sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+  #sidebar nav a {
+    display: block; padding: 10px 14px;
+    text-decoration: none; color: #999;
+    font-size: 14px; border-radius: 6px;
+    transition: color 0.25s ease;
+    cursor: pointer;
+  }
+  #sidebar nav a:hover { color: #6C5CE7; }
+  #sidebar nav a.active { color: #3A3A3A; }
+  #sidebar .footer {
+    margin-top: auto; font-size: 11px;
+    color: #CCC; line-height: 1.6;
+  }
+
+  #toggle-view {
+    position: fixed; bottom: 32px; right: 32px;
+    z-index: 30;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 12px; font-family: inherit;
+    color: #555; cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.02em;
+  }
+  #toggle-view:hover { color: #1A1A1A; border-color: rgba(0,0,0,0.15); }
+
+  #hint {
+    position: fixed; bottom: 32px;
+    left: 240px; right: 120px;
+    text-align: center;
+    font-size: 11px; color: #BBB;
+    z-index: 25; pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+
+  #container {
+    position: fixed;
+    left: 240px; top: 0; right: 0; bottom: 0;
+  }
+
+  /* CSS labels for Three.js CSS2DRenderer */
+  .node-label {
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 12px;
+    color: #666;
+    pointer-events: none;
+    user-select: none;
+    text-align: center;
+    transition: color 0.2s ease, opacity 0.3s ease;
+    white-space: nowrap;
+  }
+  .node-label.hovered {
+    color: #1A1A1A;
+    font-weight: 500;
+  }
+  .node-label.dimmed {
+    opacity: 0;
+  }
+
+  #detail {
+    position: fixed; right: 0; top: 0; bottom: 0;
+    width: 320px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(16px);
+    border-left: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 32px; z-index: 20;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  #detail.open { transform: translateX(0); }
+  #detail h2 { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 6px; }
+  #detail .meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 20px; }
+  #detail .claim { font-size: 15px; line-height: 1.65; color: #3A3A3A; margin-bottom: 24px; }
+  #detail .connections { font-size: 12px; color: #888; line-height: 1.8; }
+  #detail .connections span {
+    display: inline-block; padding: 3px 10px;
+    background: rgba(0,0,0,0.04); border-radius: 4px;
+    margin: 2px 4px 2px 0; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #detail .connections span:hover { background: rgba(108,92,231,0.1); color: #6C5CE7; }
+  #detail .close-btn {
+    position: absolute; top: 20px; right: 20px;
+    width: 28px; height: 28px;
+    border: none; background: rgba(0,0,0,0.04);
+    border-radius: 50%; cursor: pointer;
+    font-size: 14px; color: #888;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #detail .close-btn:hover { background: rgba(0,0,0,0.08); }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Kevin Lin</h1>
+  <div class="subtitle">Creative technologist.<br>Design, faith, intelligence.</div>
+  <nav>
+    <a href="#" class="active">Explore</a>
+    <a href="#">Work</a>
+    <a href="#">Writing</a>
+    <a href="#">About</a>
+    <a href="#">Contact</a>
+  </nav>
+  <div class="footer">A living knowledge system.</div>
+</div>
+
+<div id="container"></div>
+
+<button id="toggle-view">Flatten to 2D</button>
+<div id="hint">Click + drag to orbit &middot; Scroll to zoom &middot; Click a node to explore</div>
+
+<div id="detail">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <h2 id="d-title"></h2>
+  <div class="meta" id="d-meta"></div>
+  <div class="claim" id="d-claim"></div>
+  <div class="connections" id="d-conn"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// --- Data ---
+const ACCENT = 0x6C5CE7;
+const NODE_COLOR = 0x2A2A2A;
+const EDGE_COLOR = 0x1A1A1A;
+
+const surfaceNodes = [
+  { id: "design", label: "Design", desc: "20 years across industrial, software, VR, and AI", atoms: [56,57,58,109,110] },
+  { id: "faith", label: "Faith", desc: "The foundation everything rests on", atoms: [35,36,37,38,39,40,41,42,43,44,45,46,47,48,101,102,103] },
+  { id: "intelligence", label: "Intelligence", desc: "Human-AI collaboration as a new dimension", atoms: [7,8,9,10,11,12,13,14,15,16] },
+  { id: "formation", label: "Formation", desc: "How people grow — not what they know, but what they become", atoms: [49,50,51,52,53,54,55,59,60,61] },
+  { id: "storytelling", label: "Storytelling", desc: "Narrative as the structure of meaning", atoms: [26,27,28,29,30,31,32,107,108] },
+  { id: "identity", label: "Identity", desc: "Who you are shapes what you build", atoms: [33,34,35,62,63,64,65,66] },
+  { id: "knowledge", label: "Knowledge", desc: "Systems for capturing and compounding what you learn", atoms: [1,2,3,4,5,6,67,68,69,70] },
+  { id: "perception", label: "Perception", desc: "How we see determines what we see", atoms: [56,57,58,109] },
+  { id: "building", label: "Building", desc: "The act of making as a way of knowing", atoms: [17,18,19,20,21,22,23,24,25] },
+  { id: "scripture", label: "Scripture", desc: "Living words that read the reader", atoms: [38,39,40,41,42,43,44,45,46,47,48,101,102,103] },
+  { id: "fatherhood", label: "Fatherhood", desc: "A new dimension arriving September 2026", atoms: [] },
+  { id: "paradigm", label: "Paradigm Shifts", desc: "The walls that dissolve only through encounter", atoms: [49,50,71,72,73] },
+];
+
+const surfaceEdges = [
+  { s: "design", t: "perception" },
+  { s: "design", t: "building" },
+  { s: "faith", t: "scripture" },
+  { s: "faith", t: "formation" },
+  { s: "faith", t: "identity" },
+  { s: "intelligence", t: "building" },
+  { s: "intelligence", t: "knowledge" },
+  { s: "formation", t: "identity" },
+  { s: "formation", t: "paradigm" },
+  { s: "storytelling", t: "identity" },
+  { s: "storytelling", t: "perception" },
+  { s: "knowledge", t: "formation" },
+  { s: "perception", t: "paradigm" },
+  { s: "building", t: "paradigm" },
+  { s: "fatherhood", t: "formation" },
+  { s: "fatherhood", t: "faith" },
+  { s: "scripture", t: "formation" },
+];
+
+// Build adjacency
+const adj = {};
+surfaceNodes.forEach(n => { adj[n.id] = {}; });
+surfaceEdges.forEach(e => { adj[e.s][e.t] = true; adj[e.t][e.s] = true; });
+
+// --- Scene setup ---
+const container = document.getElementById('container');
+const W = () => window.innerWidth - 240;
+const H = () => window.innerHeight;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xEDEDEB);
+
+const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 1000);
+camera.position.set(0, 0, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(W(), H());
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(W(), H());
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.left = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = false;
+controls.minDistance = 5;
+controls.maxDistance = 25;
+controls.rotateSpeed = 0.5;
+
+// Lighting for 3D form definition
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+dirLight.position.set(5, 8, 10);
+scene.add(dirLight);
+// Rim/fill light from below-left for depth
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);
+fillLight.position.set(-4, -3, 6);
+scene.add(fillLight);
+
+// --- Create 3D positions ---
+// Distribute nodes in a 3D sphere with some structure
+const SPREAD = 3.5;
+const positions3D = [];
+const positions2D = [];
+
+surfaceNodes.forEach((sn, i) => {
+  // 3D: golden spiral on sphere
+  const phi = Math.acos(1 - 2 * (i + 0.5) / surfaceNodes.length);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+  const r = SPREAD * (0.7 + 0.3 * Math.sin(i * 1.7));
+
+  positions3D.push(new THREE.Vector3(
+    r * Math.sin(phi) * Math.cos(theta),
+    r * Math.sin(phi) * Math.sin(theta),
+    r * Math.cos(phi)
+  ));
+
+  // 2D: circular layout on z=0 plane
+  const angle = (i / surfaceNodes.length) * Math.PI * 2 - Math.PI / 2;
+  const r2 = SPREAD * 0.85;
+  positions2D.push(new THREE.Vector3(
+    Math.cos(angle) * r2,
+    Math.sin(angle) * r2,
+    0
+  ));
+});
+
+// --- Build nodes ---
+const nodeGroup = new THREE.Group();
+scene.add(nodeGroup);
+
+const nodeMeshes = [];
+const nodeById = {};
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// Different geometries for variety (all monochromatic)
+const geometries = {
+  sphere: new THREE.SphereGeometry(0.18, 24, 24),
+  octa: new THREE.OctahedronGeometry(0.2),
+  ico: new THREE.IcosahedronGeometry(0.18, 0),
+  box: new THREE.BoxGeometry(0.28, 0.28, 0.28),
+  tetra: new THREE.TetrahedronGeometry(0.22),
+  dodeca: new THREE.DodecahedronGeometry(0.18),
+};
+
+const geoOrder = ['sphere', 'tetra', 'ico', 'dodeca', 'octa', 'box',
+                  'sphere', 'tetra', 'ico', 'dodeca', 'octa', 'box'];
+
+surfaceNodes.forEach((sn, i) => {
+  const geo = geometries[geoOrder[i]];
+  const mat = new THREE.MeshStandardMaterial({
+    color: NODE_COLOR,
+    roughness: 0.5,
+    metalness: 0.15,
+    transparent: true,
+    opacity: 1,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(positions3D[i]);
+  mesh.userData = { ...sn, index: i, baseColor: NODE_COLOR };
+
+  // Label
+  const labelDiv = document.createElement('div');
+  labelDiv.className = 'node-label';
+  labelDiv.textContent = sn.label;
+  const label = new CSS2DObject(labelDiv);
+  label.position.set(0, -0.35, 0);
+  mesh.add(label);
+
+  nodeGroup.add(mesh);
+  nodeMeshes.push(mesh);
+  nodeById[sn.id] = mesh;
+});
+
+// --- Build edges ---
+const edgeGroup = new THREE.Group();
+scene.add(edgeGroup);
+
+const edgeLines = [];
+
+surfaceEdges.forEach(e => {
+  const a = nodeById[e.s];
+  const b = nodeById[e.t];
+  if (!a || !b) return;
+
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    a.position.clone(), b.position.clone()
+  ]);
+  const mat = new THREE.LineBasicMaterial({
+    color: EDGE_COLOR,
+    transparent: true,
+    opacity: 0.25,
+  });
+  const line = new THREE.Line(geo, mat);
+  line.userData = { source: e.s, target: e.t };
+  edgeGroup.add(line);
+  edgeLines.push(line);
+});
+
+function updateEdgePositions() {
+  edgeLines.forEach(line => {
+    const a = nodeById[line.userData.source];
+    const b = nodeById[line.userData.target];
+    const pos = line.geometry.attributes.position;
+    pos.setXYZ(0, a.position.x, a.position.y, a.position.z);
+    pos.setXYZ(1, b.position.x, b.position.y, b.position.z);
+    pos.needsUpdate = true;
+  });
+}
+
+// --- View toggle (3D <-> 2D) ---
+let is3D = true;
+let morphT = 0; // 0 = 3D, 1 = 2D
+let morphTarget = 0;
+
+const toggleBtn = document.getElementById('toggle-view');
+const hintEl = document.getElementById('hint');
+
+toggleBtn.addEventListener('click', () => {
+  is3D = !is3D;
+  morphTarget = is3D ? 0 : 1;
+  toggleBtn.textContent = is3D ? 'Flatten to 2D' : 'Expand to 3D';
+  hintEl.textContent = is3D
+    ? 'Click + drag to orbit \u00b7 Scroll to zoom \u00b7 Click a node to explore'
+    : 'Click a node to explore \u00b7 Toggle to return to 3D';
+});
+
+function morphPositions(t) {
+  nodeMeshes.forEach((mesh, i) => {
+    mesh.position.lerpVectors(positions3D[i], positions2D[i], t);
+  });
+  updateEdgePositions();
+
+  // Lock orbit in 2D mode
+  if (t > 0.9) {
+    controls.enableRotate = false;
+  } else {
+    controls.enableRotate = true;
+  }
+}
+
+// --- Hover / click ---
+let hoveredMesh = null;
+let selectedId = null;
+
+function onPointerMove(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(nodeMeshes);
+
+  const prevHovered = hoveredMesh;
+  hoveredMesh = intersects.length > 0 ? intersects[0].object : null;
+
+  if (hoveredMesh !== prevHovered) {
+    updateNodeAppearance();
+  }
+
+  renderer.domElement.style.cursor = hoveredMesh ? 'pointer' : 'grab';
+}
+
+function onPointerDown() {
+  if (!hoveredMesh) return;
+  renderer.domElement.style.cursor = 'pointer';
+}
+
+function onClick(event) {
+  if (hoveredMesh) {
+    selectedId = hoveredMesh.userData.id;
+    showDetail(hoveredMesh.userData);
+    updateNodeAppearance();
+  } else {
+    closeDetail();
+  }
+}
+
+function updateNodeAppearance() {
+  const activeId = hoveredMesh ? hoveredMesh.userData.id : selectedId;
+
+  nodeMeshes.forEach(mesh => {
+    const isActive = mesh.userData.id === activeId;
+    const isConnected = activeId && adj[activeId] && adj[activeId][mesh.userData.id];
+    const isSelected = mesh.userData.id === selectedId;
+
+    if (!activeId) {
+      mesh.material.color.setHex(NODE_COLOR);
+      mesh.material.emissive.setHex(0x000000);
+      mesh.material.emissiveIntensity = 0;
+      mesh.material.opacity = 1;
+      mesh.children[0]?.element.classList.remove('hovered', 'dimmed');
+    } else if (isActive || isSelected) {
+      mesh.material.color.setHex(ACCENT);
+      mesh.material.emissive.setHex(ACCENT);
+      mesh.material.emissiveIntensity = 0.7;
+      mesh.material.opacity = 1;
+      mesh.children[0]?.element.classList.add('hovered');
+      mesh.children[0]?.element.classList.remove('dimmed');
+    } else if (isConnected) {
+      mesh.material.color.setHex(NODE_COLOR);
+      mesh.material.emissive.setHex(0x000000);
+      mesh.material.emissiveIntensity = 0;
+      mesh.material.opacity = 0.8;
+      mesh.children[0]?.element.classList.remove('hovered', 'dimmed');
+    } else {
+      mesh.material.color.setHex(NODE_COLOR);
+      mesh.material.emissive.setHex(0x000000);
+      mesh.material.emissiveIntensity = 0;
+      mesh.material.opacity = 0.06;
+      mesh.children[0]?.element.classList.add('dimmed');
+      mesh.children[0]?.element.classList.remove('hovered');
+    }
+  });
+
+  // Edge opacity
+  edgeLines.forEach(line => {
+    const sConn = line.userData.source === activeId || line.userData.target === activeId;
+    const sSel = line.userData.source === selectedId || line.userData.target === selectedId;
+    if (!activeId) {
+      line.material.opacity = 0.25;
+    } else if (sConn || sSel) {
+      line.material.opacity = 0.5;
+    } else {
+      line.material.opacity = 0.04;
+    }
+  });
+}
+
+renderer.domElement.addEventListener('pointermove', onPointerMove);
+renderer.domElement.addEventListener('pointerdown', onPointerDown);
+renderer.domElement.addEventListener('click', onClick);
+
+// --- Detail panel ---
+function showDetail(data) {
+  document.getElementById('d-title').textContent = data.label;
+  document.getElementById('d-meta').textContent = data.atoms.length + ' ideas';
+  document.getElementById('d-claim').textContent = data.desc;
+
+  let connHtml = "<div style='margin-top:8px; font-size:11px; color:#AAA; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;'>Connected to</div>";
+  const connected = Object.keys(adj[data.id] || {});
+  connected.forEach(cid => {
+    const cn = surfaceNodes.find(n => n.id === cid);
+    if (cn) {
+      connHtml += `<span onclick="window.selectNode('${cid}')">${cn.label}</span>`;
+    }
+  });
+  document.getElementById('d-conn').innerHTML = connHtml;
+  document.getElementById('detail').classList.add('open');
+}
+
+window.closeDetail = function() {
+  selectedId = null;
+  document.getElementById('detail').classList.remove('open');
+  updateNodeAppearance();
+};
+
+window.selectNode = function(id) {
+  selectedId = id;
+  const data = surfaceNodes.find(n => n.id === id);
+  if (data) showDetail(data);
+  updateNodeAppearance();
+};
+
+// --- Gentle breathing animation ---
+const breathOffsets = nodeMeshes.map(() => Math.random() * Math.PI * 2);
+
+function animateBreathing(time) {
+  nodeMeshes.forEach((mesh, i) => {
+    if (mesh.userData.id === (hoveredMesh?.userData.id) || mesh.userData.id === selectedId) return;
+    const breath = 1 + Math.sin(time * 0.0008 + breathOffsets[i]) * 0.06;
+    // Only apply breathing if not already scaled by hover
+    if (mesh.material.opacity > 0.5) {
+      mesh.scale.setScalar(breath);
+    }
+  });
+}
+
+// --- Slow auto-rotation when not interacting ---
+let lastInteraction = Date.now();
+renderer.domElement.addEventListener('pointerdown', () => { lastInteraction = Date.now(); });
+renderer.domElement.addEventListener('wheel', () => { lastInteraction = Date.now(); });
+
+// --- Render loop ---
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  // Morph
+  morphT += (morphTarget - morphT) * 0.04;
+  morphPositions(morphT);
+
+  // Breathing
+  animateBreathing(time);
+
+  // Slow auto-rotation when idle (3D only)
+  if (is3D && Date.now() - lastInteraction > 3000) {
+    const autoRotateGroup = nodeGroup;
+    // Rotate the whole scene very slowly
+    scene.rotation.y += 0.00015;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+animate(0);
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+  renderer.setSize(W(), H());
+  labelRenderer.setSize(W(), H());
+});
+</script>
+</body>
+</html>

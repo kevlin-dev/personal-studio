@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 — Emoji Node Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F2F2F2;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
+    background: rgba(242,242,242,0.94);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 28px 32px;
+    z-index: 20; display: flex; flex-direction: column;
+  }
+  #sidebar h1 { font-size: 17px; font-weight: 500; letter-spacing: -0.02em; color: #1A1A1A; }
+  #sidebar h1 span { display: block; font-size: 11px; font-weight: 400; color: #AAA; letter-spacing: 0.01em; margin-top: 3px; }
+  #sidebar nav { display: flex; flex-direction: column; gap: 1px; margin-top: 28px; }
+  #sidebar nav a {
+    display: block; padding: 7px 10px; text-decoration: none;
+    color: #AAA; font-size: 13px; border-radius: 5px;
+    transition: color 0.15s, background 0.15s; cursor: pointer;
+  }
+  #sidebar nav a:hover { color: #1A1A1A; background: rgba(0,0,0,0.05); }
+
+  #live-data { margin-top: auto; display: flex; flex-direction: column; gap: 14px; }
+  #countdown .num { font-size: 26px; font-weight: 300; letter-spacing: -0.03em; color: #888; line-height: 1; display: block; margin-bottom: 5px; }
+  #countdown .timer { font-size: 15px; font-weight: 300; letter-spacing: 0.01em; color: #AAA; font-variant-numeric: tabular-nums; display: block; margin-bottom: 5px; }
+  #countdown .lbl { font-size: 11px; color: #BBB; }
+
+  .live-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #BBB; }
+  .pulse-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; animation: pulse 2.4s ease-in-out infinite; }
+  .pulse-dot.green { background: #34C759; }
+  .pulse-dot.gray  { background: #BBB; animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.35; transform: scale(0.8); }
+  }
+
+  #kevin-video-display {
+    position: fixed;
+    border-radius: 50%;
+    object-fit: cover;
+    z-index: 10;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+
+  #tooltip {
+    position: fixed; pointer-events: none;
+    background: rgba(26,26,26,0.88); color: #fff;
+    font-size: 12px; line-height: 1.55;
+    padding: 10px 14px; border-radius: 8px;
+    max-width: 220px; z-index: 100;
+    opacity: 0; transition: opacity 0.15s;
+    backdrop-filter: blur(8px);
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip .t-label { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 4px; }
+
+  #controls {
+    position: fixed; bottom: 82px; right: 24px; z-index: 50;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+    border: 1px solid rgba(0,0,0,0.07); border-radius: 10px;
+    padding: 16px 18px; width: 200px;
+    font-size: 11px; color: #888;
+  }
+  #controls .ctrl-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #BBB; margin-bottom: 12px; }
+  #controls label { display: block; color: #AAA; margin-bottom: 4px; }
+  #controls input[type=range] { width: 100%; margin-bottom: 12px; display: block; }
+
+  /* ── AI bar ───────────────────────────────────────── */
+  #ai-bar {
+    position: fixed; left: 220px; right: 0; bottom: 0;
+    height: 58px;
+    background: rgba(242,242,242,0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid rgba(0,0,0,0.07);
+    z-index: 30;
+    display: flex; align-items: center;
+    padding: 0 32px 0 28px;
+    gap: 14px;
+  }
+
+  #claude-mark {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(145deg, #D4875A, #B85C38);
+    flex-shrink: 0; position: relative;
+  }
+  #claude-mark::after {
+    content: '';
+    position: absolute; inset: -4px; border-radius: 50%;
+    border: 1.5px solid rgba(196,96,64,0.35);
+    animation: ai-ring 3.2s ease-in-out infinite;
+  }
+  @keyframes ai-ring {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%       { opacity: 0;   transform: scale(1.55); }
+  }
+
+  #ai-sep {
+    width: 1px; height: 18px;
+    background: rgba(0,0,0,0.10); flex-shrink: 0;
+  }
+
+  #ai-message {
+    position: relative; height: 20px;
+    min-width: 180px; overflow: hidden;
+  }
+  #ai-message span {
+    position: absolute; top: 0; left: 0;
+    font-size: 13px; font-weight: 400;
+    color: #999; letter-spacing: -0.01em;
+    white-space: nowrap;
+    transition: opacity 0.55s ease, transform 0.55s ease;
+  }
+  #ai-message span.hidden {
+    opacity: 0; transform: translateY(-7px); pointer-events: none;
+  }
+
+  #ai-field {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.75);
+    border: 1px solid rgba(0,0,0,0.09);
+    border-radius: 9px;
+    padding: 0 12px; height: 36px; min-width: 300px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  #ai-field:focus-within {
+    border-color: rgba(0,0,0,0.20);
+    background: rgba(255,255,255,0.97);
+  }
+  #ai-input {
+    flex: 1; border: none; background: transparent;
+    font-family: 'Inter', sans-serif; font-size: 13px;
+    color: #1A1A1A; outline: none;
+  }
+  #ai-input::placeholder { color: #C8C8C8; }
+  #ai-shortcut {
+    font-size: 11px; color: #D0D0D0;
+    font-family: 'Inter', sans-serif; flex-shrink: 0;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Kevin Lin <span>Creative Technologist</span></h1>
+  <nav>
+    <a href="#">Explore</a>
+    <a href="#">Work</a>
+    <a href="#">Writing</a>
+    <a href="#">About</a>
+  </nav>
+  <div id="live-data">
+    <div id="countdown">
+      <span class="num" id="days-count">—d</span>
+      <span class="timer" id="hms-count">--:--:--</span>
+      <span class="lbl">until September</span>
+    </div>
+    <div class="live-row">
+      <div class="pulse-dot green"></div>
+      <span id="local-time">Vancouver —:—</span>
+    </div>
+    <div class="live-row">
+      <div class="pulse-dot gray"></div>
+      <span>3 things live</span>
+    </div>
+  </div>
+</div>
+
+<!-- Kevin center: dark backing disc drawn on canvas + video with screen blend -->
+<video id="kevin-video" style="display:none"
+  src="../../../Downloads/EmojiMovie796720174.mov"
+  autoplay loop muted playsinline>
+</video>
+<video id="kevin-video-display"
+  src="../../../Downloads/EmojiMovie796720174.mov"
+  autoplay loop muted playsinline>
+</video>
+
+<div id="tooltip">
+  <div class="t-label" id="tt-label"></div>
+  <div id="tt-desc"></div>
+</div>
+
+<div id="controls">
+  <div class="ctrl-title">Scale</div>
+  <label>Emoji size</label>
+  <input type="range" min="0.8" max="3.2" step="0.1" value="1.8"
+    oninput="CONTROLS.emojiScale=+this.value">
+  <label>Kevin size</label>
+  <input type="range" min="40" max="180" step="2" value="95"
+    oninput="CONTROLS.kevinSize=+this.value">
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="ai-bar">
+  <div id="claude-mark"></div>
+  <div id="ai-sep"></div>
+  <div id="ai-message">
+    <span id="ai-msg">Hello, Kevin.</span>
+  </div>
+  <div id="ai-field">
+    <input type="text" id="ai-input" placeholder="Ask or explore...">
+    <span id="ai-shortcut">⌘K</span>
+  </div>
+</div>
+
+<script>
+// ── Live data ────────────────────────────────────────
+(function() {
+  var edd = new Date('2026-09-28T00:00:00-07:00');
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function updateCountdown() {
+    var diff = Math.max(0, edd - new Date());
+    var totalSec = Math.floor(diff / 1000);
+    var d = Math.floor(totalSec / 86400);
+    var h = Math.floor((totalSec % 86400) / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    document.getElementById('days-count').textContent = d + 'd';
+    document.getElementById('hms-count').textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+  }
+  updateCountdown(); setInterval(updateCountdown, 1000);
+
+  function updateTime() {
+    var t = new Date().toLocaleTimeString('en-CA', {
+      timeZone: 'America/Vancouver', hour: '2-digit', minute: '2-digit', hour12: true
+    });
+    document.getElementById('local-time').textContent = 'Vancouver ' + t;
+  }
+  updateTime(); setInterval(updateTime, 30000);
+})();
+</script>
+
+<script>
+(function() {
+  var canvas      = document.getElementById('canvas');
+  var ctx         = canvas.getContext('2d');
+  var tooltip     = document.getElementById('tooltip');
+  var videoDisplay = document.getElementById('kevin-video-display');
+  var W, H, dpr;
+  var sidebarW = 220;
+
+  // Live-adjustable controls — global so HTML oninput can reach it
+  window.CONTROLS = { emojiScale: 1.8, kevinSize: 95 };
+
+  var hoveredNode     = null;
+  var dragNode        = null;
+  var isDraggingKevin = false;
+  var didDrag         = false;
+  var mouseX = 0, mouseY = 0;
+  var drillMode = false, drillTarget = null;
+  var kevinOpacity = 1, kevinTargetOpacity = 1;
+
+  // ── Node data ────────────────────────────────────────
+  var surfaceNodes = [
+    // Philosophical
+    { id: "ground",       label: "Ground",        emoji: "🪨",  live: false,
+      desc: "The sacred is not absent from ordinary life — it is invisible. Design's highest task is rendering it visible.",
+      links: ["seeing", "making", "september"] },
+    { id: "seeing",       label: "Seeing",         emoji: "👁️",  live: false,
+      desc: "The mind compresses reality into cached symbols. Perception requires suppressing the symbol to see what's actually there.",
+      links: ["ground", "the-crossing", "second-brain", "letters"] },
+    { id: "the-crossing", label: "The Crossing",   emoji: "⚡",  live: false,
+      desc: "A masterpiece is the irreversible fusion of two genuinely independent elements into a third thing neither could produce alone.",
+      links: ["seeing", "making", "timely-help", "lab"] },
+    { id: "making",       label: "Making",          emoji: "🔨",  live: false,
+      desc: "Human person is maker in the image of a making God. Craft is a way of knowing, not just producing.",
+      links: ["ground", "the-crossing", "timely-help", "second-brain"] },
+    { id: "becoming",     label: "Becoming",        emoji: "🦋",  live: false,
+      desc: "Agency — self-direction without permission — is the only skill AI cannot replace.",
+      links: ["second-brain", "september", "letters"] },
+
+    // Live / active
+    { id: "timely-help",  label: "Timely Help",    emoji: "⌚",  live: true,
+      desc: "Apple Watch app. Scripture at the moment your body signals need. 12-year-old idea, finally shipped.",
+      links: ["making", "the-crossing", "ground"] },
+    { id: "second-brain", label: "Second Brain",   emoji: "🧠",  live: true,
+      desc: "122 atoms across 14 domains. A living knowledge system built in public with Claude.",
+      links: ["seeing", "becoming", "making"] },
+    { id: "lab",          label: "Lab",             emoji: "⚗️",  live: true,
+      desc: "Finance dashboard. Momentum trading. Things actively being built and used.",
+      links: ["the-crossing", "making"] },
+
+    // Content
+    { id: "letters",      label: "Letters",         emoji: "✍️",  live: false,
+      desc: "Writing about what it actually looks like to live with AI. Not tutorials — a documentary.",
+      links: ["becoming", "seeing"] },
+
+    // Human / texture
+    { id: "september",    label: "September",       emoji: "🍼",  live: false,
+      desc: "First child arriving. This whole project is running in parallel to a person forming.",
+      links: ["ground", "becoming"] },
+    { id: "vancouver",    label: "Vancouver",       emoji: "🌧️",  live: false,
+      desc: "This is where the work happens. Pacific Standard Time.",
+      links: ["september"] },
+  ];
+
+  var adj = {};
+  surfaceNodes.forEach(function(n) { adj[n.id] = {}; });
+  surfaceNodes.forEach(function(n) {
+    (n.links || []).forEach(function(t) {
+      if (!adj[t]) return;
+      adj[n.id][t] = true; adj[t][n.id] = true;
+    });
+  });
+
+  var kevin = { x: 0, y: 0, vx: 0, vy: 0, size: 36 };
+
+  var PHYSICS = {
+    orbitRadius: 240,
+    orbitSnap:   0.012,
+    repulsion:   950,
+    nodeDamping: 0.62,
+    kevinFloat:  0.62,
+  };
+
+  var nodes = [], nodeById = {};
+
+  function initNodes() {
+    nodes = []; nodeById = {};
+    var cx = sidebarW + (W - sidebarW) / 2;
+    var cy = H / 2;
+    var R  = Math.max(180, Math.min(W - sidebarW, H) * 0.30);
+    kevin.x = cx; kevin.y = cy; kevin.vx = 0; kevin.vy = 0;
+    surfaceNodes.forEach(function(sn, i) {
+      var a = (i / surfaceNodes.length) * Math.PI * 2;
+      var r = R * (0.85 + Math.random() * 0.30);
+      var n = {
+        id: sn.id, label: sn.label, emoji: sn.emoji, live: sn.live, desc: sn.desc,
+        size: 20,
+        x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+        vx: 0, vy: 0,
+        opacity: 1, targetOpacity: 1,
+        visScale: 1, targetVisScale: 1,
+        phase: Math.random() * Math.PI * 2,
+        orbitRadius: PHYSICS.orbitRadius * ((i % 2 === 0 ? 0.85 : 1.10) + Math.random() * 0.08),
+      };
+      nodes.push(n); nodeById[sn.id] = n;
+    });
+  }
+
+  function setup() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width  = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (nodes.length === 0) initNodes();
+  }
+  setup();
+  window.addEventListener('resize', setup);
+
+  // ── Physics ──────────────────────────────────────────
+  function simulate() {
+    var i, j, n, other, dx, dy, d, force;
+    var time = Date.now() * 0.00028;
+
+    if (!isDraggingKevin) {
+      kevin.vx *= PHYSICS.kevinFloat; kevin.vy *= PHYSICS.kevinFloat;
+      kevin.x  += kevin.vx;          kevin.y  += kevin.vy;
+      var mg = 80;
+      kevin.x = Math.max(sidebarW + mg, Math.min(W - mg, kevin.x));
+      kevin.y = Math.max(mg, Math.min(H - mg, kevin.y));
+    }
+
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      if (n === dragNode) { n.x = mouseX; n.y = mouseY; n.vx = 0; n.vy = 0; continue; }
+
+      dx = n.x - kevin.x; dy = n.y - kevin.y;
+      d  = Math.sqrt(dx*dx + dy*dy) || 1;
+      var radial = (d - n.orbitRadius) * PHYSICS.orbitSnap;
+      n.vx -= (dx/d)*radial; n.vy -= (dy/d)*radial;
+      if (!isDraggingKevin) { kevin.vx += (dx/d)*radial; kevin.vy += (dy/d)*radial; }
+
+      for (j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        other = nodes[j];
+        dx = n.x - other.x; dy = n.y - other.y;
+        d  = Math.sqrt(dx*dx + dy*dy) || 1;
+        if (d > 280) continue;
+        force = PHYSICS.repulsion / (d*d);
+        n.vx += (dx/d)*force; n.vy += (dy/d)*force;
+      }
+
+      if (n.x < sidebarW+44) n.vx += (sidebarW+44-n.x)*0.4;
+      if (n.x > W-44)        n.vx += (W-44-n.x)*0.4;
+      if (n.y < 44)          n.vy += (44-n.y)*0.4;
+      if (n.y > H-44)        n.vy += (H-44-n.y)*0.4;
+
+      n.vx += Math.sin(time + i*2.3) * 0.0007;
+      n.vy += Math.cos(time*0.75 + i*1.8) * 0.0007;
+
+      n.vx *= PHYSICS.nodeDamping; n.vy *= PHYSICS.nodeDamping;
+      n.x  += n.vx; n.y  += n.vy;
+    }
+
+    kevinOpacity += (kevinTargetOpacity - kevinOpacity) * 0.07;
+    nodes.forEach(function(n) {
+      n.opacity  += (n.targetOpacity  - n.opacity)  * 0.07;
+      n.visScale += (n.targetVisScale - n.visScale)  * 0.07;
+    });
+
+    // Position the video display element to follow Kevin
+    var vSize = CONTROLS.kevinSize;
+    videoDisplay.style.width   = vSize + 'px';
+    videoDisplay.style.height  = vSize + 'px';
+    videoDisplay.style.left    = (kevin.x - vSize/2) + 'px';
+    videoDisplay.style.top     = (kevin.y - vSize/2) + 'px';
+    videoDisplay.style.opacity = kevinOpacity;
+  }
+
+  // ── Kevin canvas layer: dark backing disc + label ────
+  // The dark disc gives mix-blend-mode:screen a proper base —
+  // black video pixels + dark disc = transparent. Face appears clean.
+  function drawKevinLayer(x, y, op) {
+    if (op < 0.01) return;
+    var r = CONTROLS.kevinSize / 2;
+    ctx.globalAlpha = op;
+
+    // Dark backing disc
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = '#1A1A1A';
+    ctx.fill();
+
+    // Name label
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(26,26,26,' + op + ')';
+    ctx.fillText('Kevin Lin', x, y + r + 16);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Node draw (emoji only, no background circle) ─────
+  function drawNode(n) {
+    if (n.opacity < 0.01) return;
+    var s = n.size * n.visScale;
+    var emojiPx = Math.round(s * CONTROLS.emojiScale);
+
+    ctx.globalAlpha = n.opacity;
+
+    // Emoji
+    ctx.font = emojiPx + 'px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.emoji, n.x, n.y + 1);
+    ctx.textBaseline = 'alphabetic';
+
+    // Live dot — top right of emoji
+    if (n.live) {
+      var dX = n.x + emojiPx * 0.36;
+      var dY = n.y - emojiPx * 0.36;
+      var pulse = 0.55 + 0.45 * Math.sin(Date.now() * 0.0025 + n.phase);
+      // White ring so dot reads on any emoji colour
+      ctx.beginPath(); ctx.arc(dX, dY, 6, 0, Math.PI*2);
+      ctx.fillStyle = '#F2F2F2'; ctx.fill();
+      ctx.beginPath(); ctx.arc(dX, dY, 4.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(52,199,89,' + (0.6+0.4*pulse) + ')';
+      ctx.fill();
+    }
+
+    // Label
+    var labelY = n.y + emojiPx * 0.56 + 16;
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = n === hoveredNode || (drillMode && n.id === drillTarget)
+      ? 'rgba(26,26,26,' + n.opacity + ')'
+      : 'rgba(110,105,100,' + n.opacity + ')';
+    ctx.fillText(n.label, n.x, labelY);
+
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Render loop ──────────────────────────────────────
+  function draw() {
+    simulate();
+    ctx.clearRect(0, 0, W, H);
+    var time = Date.now();
+
+    // Opacity targets
+    if (drillMode) {
+      kevinTargetOpacity = 0.08;
+      nodes.forEach(function(n) {
+        var hit = n.id === drillTarget || (adj[drillTarget] && adj[drillTarget][n.id]);
+        n.targetOpacity  = hit ? 1 : 0;
+        n.targetVisScale = hit ? 1 : 0.5;
+      });
+    } else if (hoveredNode) {
+      kevinTargetOpacity = 0.20;
+      nodes.forEach(function(n) {
+        var hit = n === hoveredNode || (adj[hoveredNode.id] && adj[hoveredNode.id][n.id]);
+        n.targetOpacity  = hit ? 1 : 0.07;
+        n.targetVisScale = 1;
+      });
+    } else {
+      kevinTargetOpacity = 1;
+      nodes.forEach(function(n) { n.targetOpacity = 1; n.targetVisScale = 1; });
+    }
+
+    // Halo (drawn behind spokes)
+    drawKevinLayer(kevin.x, kevin.y, kevinOpacity);
+
+    // Spoke edges — Kevin to each node
+    var kevinR = CONTROLS.kevinSize / 2;
+    nodes.forEach(function(n) {
+      var eOp = Math.min(n.opacity, kevinOpacity);
+      if (eOp < 0.02) return;
+      var emojiHalf = (n.size * n.visScale * CONTROLS.emojiScale) * 0.5;
+      var dx = n.x - kevin.x, dy = n.y - kevin.y;
+      var d  = Math.sqrt(dx*dx + dy*dy); if (d < 1) return;
+      var ux = dx/d, uy = dy/d;
+      ctx.beginPath();
+      ctx.moveTo(kevin.x + ux*(kevinR+2), kevin.y + uy*(kevinR+2));
+      ctx.lineTo(n.x    - ux*(emojiHalf+2), n.y - uy*(emojiHalf+2));
+      ctx.strokeStyle = n === hoveredNode
+        ? 'rgba(26,26,26,'+(0.45*eOp)+')'
+        : 'rgba(26,26,26,'+(0.22*eOp)+')';
+      ctx.lineWidth = n === hoveredNode ? 1.2 : 0.75;
+      ctx.stroke();
+    });
+
+    // Node-to-node edges on hover / drill
+    var focusId = drillMode ? drillTarget : (hoveredNode ? hoveredNode.id : null);
+    if (focusId) {
+      Object.keys(adj[focusId] || {}).forEach(function(tid) {
+        var a = nodeById[focusId], b = nodeById[tid]; if (!a || !b) return;
+        var minOp = Math.min(a.opacity, b.opacity); if (minOp < 0.04) return;
+        var aHalf = (a.size * a.visScale * CONTROLS.emojiScale) * 0.5;
+        var bHalf = (b.size * b.visScale * CONTROLS.emojiScale) * 0.5;
+        var dx = b.x-a.x, dy = b.y-a.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 1) return;
+        var ux = dx/d, uy = dy/d;
+        ctx.beginPath();
+        ctx.moveTo(a.x + ux*(aHalf+2), a.y + uy*(aHalf+2));
+        ctx.lineTo(b.x - ux*(bHalf+2), b.y - uy*(bHalf+2));
+        ctx.strokeStyle = 'rgba(26,26,26,'+(0.18*minOp)+')';
+        ctx.lineWidth = 0.75; ctx.stroke();
+      });
+    }
+
+    // Nodes (drawn over spokes)
+    nodes.forEach(drawNode);
+
+    requestAnimationFrame(draw);
+  }
+
+  // ── Hit tests ────────────────────────────────────────
+  function hitNode(mx, my) {
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      var n = nodes[i];
+      var r = (n.size * n.visScale * CONTROLS.emojiScale) * 0.5 + 10;
+      if (Math.hypot(mx-n.x, my-n.y) < r) return n;
+    }
+    return null;
+  }
+  function hitKevin(mx, my) {
+    return Math.hypot(mx - kevin.x, my - kevin.y) < CONTROLS.kevinSize / 2 + 10;
+  }
+
+  // ── Tooltip ──────────────────────────────────────────
+  function showTooltip(n, mx, my) {
+    document.getElementById('tt-label').textContent = n.label;
+    document.getElementById('tt-desc').textContent  = n.desc;
+    var tx = mx + 18, ty = my - 10;
+    if (tx + 240 > W) tx = mx - 240;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top  = ty + 'px';
+    tooltip.classList.add('visible');
+  }
+  function hideTooltip() { tooltip.classList.remove('visible'); }
+
+  // ── Input ────────────────────────────────────────────
+  canvas.addEventListener('mousedown', function(e) {
+    mouseX = e.clientX; mouseY = e.clientY; didDrag = false;
+    if (hitKevin(e.clientX, e.clientY)) { isDraggingKevin = true; canvas.style.cursor = 'grabbing'; return; }
+    var n = hitNode(e.clientX, e.clientY);
+    if (n) { dragNode = n; canvas.style.cursor = 'grabbing'; }
+  });
+
+  canvas.addEventListener('mousemove', function(e) {
+    mouseX = e.clientX; mouseY = e.clientY;
+    if (isDraggingKevin) { kevin.x = e.clientX; kevin.y = e.clientY; kevin.vx = 0; kevin.vy = 0; didDrag = true; hideTooltip(); return; }
+    if (dragNode) { didDrag = true; hideTooltip(); return; }
+    var hn = hitNode(e.clientX, e.clientY);
+    hoveredNode = hn;
+    canvas.style.cursor = (hn || hitKevin(e.clientX, e.clientY)) ? 'grab' : 'default';
+    if (hn) showTooltip(hn, e.clientX, e.clientY); else hideTooltip();
+  });
+
+  canvas.addEventListener('mouseup', function(e) {
+    var wasDrag = didDrag, relNode = dragNode;
+    if (wasDrag && relNode) { relNode.vx = 0; relNode.vy = 0; }
+    isDraggingKevin = false; dragNode = null; didDrag = false;
+    if (wasDrag) { canvas.style.cursor = 'default'; return; }
+    var n = hitNode(e.clientX, e.clientY);
+    if (n) { drillMode = true; drillTarget = n.id; }
+    else   { drillMode = false; drillTarget = null; }
+  });
+
+  canvas.addEventListener('mouseleave', function() { hoveredNode = null; hideTooltip(); });
+
+  draw();
+})();
+</script>
+
+<script>
+// ── AI bar ───────────────────────────────────────────
+(function() {
+  var messages = [
+    "Hello, Kevin.",
+    "3 things live right now.",
+    "122 atoms in formation.",
+    "Everything's connected.",
+    "The graph is breathing.",
+  ];
+  var idx = 0;
+  var el = document.getElementById('ai-msg');
+
+  function nextMessage() {
+    // fade out
+    el.classList.add('hidden');
+    setTimeout(function() {
+      idx = (idx + 1) % messages.length;
+      el.textContent = messages[idx];
+      // position below, then fade in
+      el.style.transform = 'translateY(7px)';
+      el.style.opacity = '0';
+      el.classList.remove('hidden');
+      requestAnimationFrame(function() {
+        el.style.transform = '';
+        el.style.opacity = '';
+      });
+    }, 580);
+  }
+
+  // First message appears after a short settle delay
+  setTimeout(function() {
+    setInterval(nextMessage, 5000);
+  }, 3000);
+
+  // ⌘K focuses the input
+  document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('ai-input').focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

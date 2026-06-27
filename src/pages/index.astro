@@ -3,8 +3,238 @@ import Layout from '../components/Layout.astro';
 ---
 
 <Layout title="Kevin Lin — Creative Technologist">
-  <section>
-    <h1>Kevin Lin</h1>
-    <p>Creative Technologist. I design products and build them.</p>
+
+  <!-- ======================== HERO ======================== -->
+  <section class="hero">
+    <div class="container-reading" style="display:flex;flex-direction:column;align-items:center;">
+      <p class="type-display hero-line" style="max-width:18ch;text-align:center;">
+        You know AI changes everything.
+      </p>
+      <p class="hero-sub hero-line" style="margin-top:var(--space-4);">
+        You just don't know what that looks like yet.
+      </p>
+      <div class="hero-spacer"></div>
+      <p class="type-display hero-line hero-accent" style="max-width:20ch;text-align:center;">
+        This is what it looks like.
+      </p>
+    </div>
+    <div class="scroll-cue">
+      <div class="scroll-cue-line"></div>
+      <span class="scroll-cue-text">Scroll</span>
+    </div>
   </section>
+
+
+  <!-- ======================== IDENTITY ======================== -->
+  <section class="section" id="about">
+    <div class="theater">
+      <div class="identity-grid reveal">
+        <div class="identity-portrait">
+          <!-- Add portrait: public/images/kevin-portrait.jpg -->
+          <span class="identity-portrait-placeholder">Portrait</span>
+        </div>
+        <div class="identity-copy type-body-lg">
+          <p>
+            I'm Kevin. Designer. 10+ years in tech.<br />
+            I've reinvented myself through every major shift in my career.
+            This is the biggest one.
+          </p>
+          <p>
+            <span class="hover-reveal">First-time father. Baby arriving September.<span class="hover-reveal-popup"><img src="/images/ultrasound.jpg" alt="12-week ultrasound" loading="lazy" /><span class="hover-reveal-caption">12 weeks</span></span></span><br />
+            Collaborating with AI to build a life, not just a product.
+          </p>
+          <p style="color:var(--color-text-primary);font-weight:500;">
+            I'm sharing everything.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ======================== PHILOSOPHY ======================== -->
+  <section class="section" id="philosophy">
+    <div class="theater">
+      <span class="type-eyebrow reveal" style="display:block;margin-bottom:var(--space-8);">Thinking</span>
+      <div class="philosophy-grid">
+        <div class="philosophy-text reveal">
+          <p class="type-h2" style="color:var(--color-text-primary);margin-bottom:var(--space-8);">
+            My child will never know a world without AI.<br />
+            I'm building the one worth handing them.
+          </p>
+          <p class="type-body-lg">
+            The question isn't what AI can do for you.
+            It's what you're becoming while you use it.
+          </p>
+        </div>
+        <div class="philosophy-aside reveal">
+          <blockquote>
+            The tool gets better every week. The question is whether you do too.
+          </blockquote>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ======================== WORK ======================== -->
+  <section class="section" id="work">
+    <div class="theater">
+      <span class="type-eyebrow reveal" style="display:block;margin-bottom:var(--space-3);">Work</span>
+      <p class="type-h2 reveal" style="margin-bottom:var(--space-12);">Built with AI. Shipped for real.</p>
+
+      <div class="work-grid reveal-stagger">
+        <div class="work-card">
+          <div class="work-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <h3 class="work-card-title">The Knowledge System</h3>
+          <p class="work-card-desc">
+            122 interconnected ideas across 14 domains. A living second brain that compounds insight over time.
+          </p>
+          <span class="work-card-tag">Knowledge Architecture</span>
+        </div>
+
+        <div class="work-card">
+          <div class="work-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="3"/><circle cx="12" cy="18" r="1"/>
+            </svg>
+          </div>
+          <h3 class="work-card-title">Timely Help</h3>
+          <p class="work-card-desc">
+            An Apple Watch app that delivers scripture at the right moment. A 12-year-old idea, finally shipped.
+          </p>
+          <span class="work-card-tag">watchOS App</span>
+        </div>
+
+        <div class="work-card">
+          <div class="work-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h3 class="work-card-title">The Investment Dashboard</h3>
+          <p class="work-card-desc">
+            A portfolio tracker that shows things your brokerage doesn't. Built in a weekend with Claude.
+          </p>
+          <span class="work-card-tag">Data Visualization</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ======================== WRITING ======================== -->
+  <section class="section" id="writing">
+    <div class="theater">
+      <span class="type-eyebrow reveal" style="display:block;margin-bottom:var(--space-3);">Writing</span>
+      <p class="type-h2 reveal" style="margin-bottom:var(--space-8);">Thinking out loud</p>
+
+      <div class="writing-list reveal">
+        <a href="#" class="writing-item">
+          <span class="writing-item-title">You've saved 47 AI videos. You know why you haven't watched them.</span>
+          <span class="writing-item-arrow">&rarr;</span>
+        </a>
+        <a href="#" class="writing-item">
+          <span class="writing-item-title">The gap between what AI can do and what you get it to do</span>
+          <span class="writing-item-arrow">&rarr;</span>
+        </a>
+        <a href="#" class="writing-item">
+          <span class="writing-item-title">School taught you to specialize. Something in you always resisted.</span>
+          <span class="writing-item-arrow">&rarr;</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ======================== CLOSE ======================== -->
+  <section class="close-section" id="connect">
+    <div class="reveal" style="display:flex;flex-direction:column;align-items:center;">
+      <p class="type-h1" style="margin-bottom:var(--space-4);text-align:center;max-width:20ch;">
+        Follow along.<br />I'm sharing everything.
+      </p>
+      <p class="type-body" style="color:var(--color-text-secondary);text-align:center;max-width:40ch;">
+        A weekly letter on building with AI, becoming a father, and designing a life that compounds.
+      </p>
+      <form class="email-form" id="email-form">
+        <input
+          type="email"
+          class="email-input"
+          placeholder="Your email"
+          required
+          aria-label="Email address"
+        />
+        <button type="submit" class="btn-primary">Subscribe</button>
+      </form>
+      <p class="email-success" id="email-success">Welcome aboard.</p>
+    </div>
+  </section>
+
+
+  <!-- ======================== FOOTER ======================== -->
+  <footer class="site-footer">
+    <div class="theater">
+      <div class="footer-grid">
+        <div>
+          <p class="footer-brand">Kevin Lin</p>
+          <p class="footer-tagline">Creative Technologist. Vancouver, BC.</p>
+        </div>
+        <div>
+          <p class="footer-heading">Navigate</p>
+          <ul class="footer-links">
+            <li><a href="#work">Work</a></li>
+            <li><a href="#writing">Writing</a></li>
+            <li><a href="#philosophy">Thinking</a></li>
+            <li><a href="#connect">Connect</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="footer-heading">Elsewhere</p>
+          <ul class="footer-links">
+            <li><a href="https://linkedin.com/in/kevinlin" target="_blank" rel="noopener">LinkedIn</a></li>
+            <li><a href="https://github.com/kevinlin" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="mailto:hello@kevinlin.studio">Email</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span class="footer-copyright">&copy; 2026 Kevin Lin. Built with Claude.</span>
+      </div>
+    </div>
+  </footer>
+
 </Layout>
+
+
+<script>
+  // Scroll reveal observer
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -40px 0px'
+  });
+
+  document.querySelectorAll('.reveal, .reveal-stagger').forEach(el => {
+    observer.observe(el);
+  });
+
+  // Email form (placeholder — connect to ConvertKit/Buttondown later)
+  const form = document.getElementById('email-form') as HTMLFormElement;
+  const success = document.getElementById('email-success');
+
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    form.style.display = 'none';
+    if (success) success.style.display = 'block';
+  });
+</script>

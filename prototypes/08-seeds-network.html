@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 — Seeds Network (445 Seeds + Atoms)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0A0A; color: #F2F2F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+  #tooltip {
+    position: fixed; pointer-events: none; opacity: 0;
+    background: rgba(20,20,20,0.95); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 12px 16px; max-width: 360px;
+    transition: opacity 0.15s ease; backdrop-filter: blur(12px); z-index: 100;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.5; margin-bottom: 6px; }
+  #tooltip .desc { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+  #info {
+    position: fixed; top: 24px; left: 24px; z-index: 10;
+    font-size: 13px; opacity: 0.4; line-height: 1.6;
+  }
+  #info h2 { font-size: 16px; font-weight: 600; opacity: 1; margin-bottom: 4px; }
+  #controls {
+    position: fixed; top: 24px; right: 24px; z-index: 10;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    color: #F2F2F0; padding: 6px 12px; border-radius: 6px; font-size: 11px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(255,255,255,0.12); }
+  .btn.active { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+  #stats {
+    position: fixed; bottom: 24px; left: 24px; z-index: 10;
+    font-size: 11px; opacity: 0.3; line-height: 1.8;
+  }
+  #legend {
+    position: fixed; bottom: 24px; right: 24px; z-index: 10;
+    display: flex; flex-direction: column; gap: 4px; text-align: right;
+  }
+  .legend-item { font-size: 11px; opacity: 0.4; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend-ring { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid; background: transparent; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h2>08 — Seeds + Atoms Network</h2>
+  445 seeds (outlined) connected to 111 atoms (filled).<br>
+  The full knowledge ecosystem. Scroll to zoom. Drag to pan.
+</div>
+<div id="controls">
+  <button class="btn active" onclick="filterType('all', this)">All</button>
+  <button class="btn" onclick="filterType('person', this)">People (199)</button>
+  <button class="btn" onclick="filterType('concept', this)">Concepts (60)</button>
+  <button class="btn" onclick="filterType('term', this)">Terms (87)</button>
+  <button class="btn" onclick="filterType('book', this)">Books (45)</button>
+  <button class="btn" onclick="filterType('framework', this)">Frameworks (33)</button>
+</div>
+<div id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="meta" id="tt-meta"></div>
+  <div class="desc" id="tt-desc"></div>
+</div>
+<div id="stats"></div>
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#E8C547"></div>Atom (filled)</div>
+  <div class="legend-item"><div class="legend-ring" style="border-color:#5B8DEF"></div>Seed (outlined)</div>
+</div>
+<canvas id="canvas"></canvas>
+
+<script src="atoms-data.js"></script>
+<script src="seeds-data.js"></script>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+let W = window.innerWidth, H = window.innerHeight, dpr = window.devicePixelRatio || 1;
+let hoveredNode = null;
+let camX = 0, camY = 0, zoom = 0.6;
+let isPanning = false, panStartX, panStartY, camStartX, camStartY;
+let activeFilter = 'all';
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+function filterType(type, btn) {
+  activeFilter = type;
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// Build unified node list: atoms + seeds
+const allNodes = [];
+const nodeById = {};
+
+// Atoms first (filled circles, slightly larger)
+atoms.forEach(a => {
+  const n = {
+    id: 'atom-' + a.id,
+    label: '#' + a.id + ' ' + a.title,
+    desc: a.claim,
+    kind: 'atom',
+    type: a.domain,
+    level: a.level,
+    x: W/2 + (Math.random() - 0.5) * W * 1.2,
+    y: H/2 + (Math.random() - 0.5) * H * 1.2,
+    vx: 0, vy: 0,
+    radius: 5,
+    color: getDomainColor(a.domain),
+    visible: true,
+  };
+  allNodes.push(n);
+  nodeById[n.id] = n;
+});
+
+// Seeds (outlined circles, smaller)
+seeds.forEach(s => {
+  const n = {
+    id: 'seed-' + s.id,
+    label: s.name,
+    desc: s.type + ' \u00B7 ' + s.domain + ' \u00B7 ' + s.level,
+    kind: 'seed',
+    type: s.type,
+    level: s.level,
+    x: W/2 + (Math.random() - 0.5) * W * 1.5,
+    y: H/2 + (Math.random() - 0.5) * H * 1.5,
+    vx: 0, vy: 0,
+    radius: getSeedLevelSize(s.level) * 0.5,
+    color: getSeedTypeColor(s.type),
+    visible: true,
+    seedType: s.type,
+  };
+  allNodes.push(n);
+  nodeById[n.id] = n;
+});
+
+// Build edges
+const allEdges = [];
+seedEdges.forEach(e => {
+  const src = nodeById[typeof e.source === 'string' ? e.source : 'seed-' + e.source];
+  const tgt = nodeById[typeof e.target === 'string' ? e.target : 'seed-' + e.target];
+  if (src && tgt) {
+    allEdges.push({ source: src, target: tgt, type: e.type });
+  }
+});
+
+// Also add atom primary links
+atoms.forEach(a => {
+  if (a.primaryLink) {
+    const src = nodeById['atom-' + a.id];
+    const tgt = nodeById['atom-' + a.primaryLink];
+    if (src && tgt) allEdges.push({ source: src, target: tgt, type: 'primary' });
+  }
+});
+
+// Adjacency
+const adjSet = {};
+allNodes.forEach(n => adjSet[n.id] = new Set());
+allEdges.forEach(e => {
+  adjSet[e.source.id].add(e.target.id);
+  adjSet[e.target.id].add(e.source.id);
+});
+
+// Stats
+document.getElementById('stats').innerHTML =
+  allNodes.filter(n => n.kind === 'atom').length + ' atoms<br>' +
+  allNodes.filter(n => n.kind === 'seed').length + ' seeds<br>' +
+  allEdges.length + ' connections';
+
+function screenToWorld(sx, sy) {
+  return { x: (sx - W/2) / zoom + camX, y: (sy - H/2) / zoom + camY };
+}
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom = Math.max(0.1, Math.min(3, zoom * (e.deltaY > 0 ? 0.93 : 1.07)));
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  isPanning = true; panStartX = e.clientX; panStartY = e.clientY;
+  camStartX = camX; camStartY = camY;
+});
+canvas.addEventListener('mousemove', e => {
+  if (isPanning) {
+    camX = camStartX - (e.clientX - panStartX) / zoom;
+    camY = camStartY - (e.clientY - panStartY) / zoom;
+  }
+  const world = screenToWorld(e.clientX, e.clientY);
+  let closest = null, closestDist = Infinity;
+  allNodes.forEach(n => {
+    if (!n.visible) return;
+    const dx = n.x - world.x, dy = n.y - world.y;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < (n.radius + 5) / zoom && d < closestDist) { closest = n; closestDist = d; }
+  });
+  hoveredNode = closest;
+  if (closest) {
+    document.getElementById('tt-title').textContent = closest.label;
+    document.getElementById('tt-meta').textContent = closest.kind.toUpperCase() + ' \u00B7 ' + closest.type + (closest.level ? ' \u00B7 ' + closest.level : '');
+    document.getElementById('tt-desc').textContent = closest.desc;
+    tooltip.classList.add('visible');
+    tooltip.style.left = Math.min(e.clientX + 16, W - 380) + 'px';
+    tooltip.style.top = Math.min(e.clientY - 10, H - 100) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
+  }
+});
+canvas.addEventListener('mouseup', () => { isPanning = false; });
+
+// Simplified physics (many nodes — use spatial hashing)
+let tick = 0;
+function simulate() {
+  tick++;
+  const DAMPING = 0.9;
+
+  // Update visibility
+  allNodes.forEach(n => {
+    if (activeFilter === 'all') { n.visible = true; }
+    else if (n.kind === 'atom') {
+      // Atoms always visible, but check if connected to filtered seeds
+      n.visible = true;
+    } else {
+      n.visible = n.seedType === activeFilter;
+    }
+  });
+
+  // Only run repulsion every 2 frames for performance, and use sampling
+  if (tick % 2 === 0) {
+    const visibleNodes = allNodes.filter(n => n.visible);
+    // Sample-based repulsion (not all pairs)
+    const sampleSize = Math.min(visibleNodes.length, 200);
+    for (let i = 0; i < sampleSize; i++) {
+      const a = visibleNodes[i];
+      for (let j = i + 1; j < Math.min(i + 30, visibleNodes.length); j++) {
+        const b = visibleNodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        let d = Math.sqrt(dx*dx + dy*dy) || 1;
+        if (d > 150) continue;
+        const force = 200 / (d * d);
+        a.vx += (dx/d) * force; a.vy += (dy/d) * force;
+        b.vx -= (dx/d) * force; b.vy -= (dy/d) * force;
+      }
+    }
+  }
+
+  // Link attraction
+  allEdges.forEach(e => {
+    if (!e.source.visible || !e.target.visible) return;
+    const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = (d - 40) * 0.001;
+    e.source.vx += (dx/d) * force; e.source.vy += (dy/d) * force;
+    e.target.vx -= (dx/d) * force; e.target.vy -= (dy/d) * force;
+  });
+
+  allNodes.forEach(n => {
+    n.vx += (W/2 - n.x) * 0.00015;
+    n.vy += (H/2 - n.y) * 0.00015;
+    n.vx *= DAMPING; n.vy *= DAMPING;
+    n.x += n.vx; n.y += n.vy;
+  });
+}
+
+function draw() {
+  simulate();
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-camX, -camY);
+
+  // Edges
+  allEdges.forEach(e => {
+    if (!e.source.visible || !e.target.visible) return;
+    const isHovered = hoveredNode && (e.source === hoveredNode || e.target === hoveredNode);
+    if (hoveredNode && !isHovered) return; // Hide non-hovered edges when something is hovered
+
+    ctx.beginPath();
+    ctx.moveTo(e.source.x, e.source.y);
+    ctx.lineTo(e.target.x, e.target.y);
+    if (isHovered) {
+      ctx.strokeStyle = e.type === 'atom-ref' ? '#E8C54755' : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = e.type === 'atom-ref' ? 1.5 : 1;
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+      ctx.lineWidth = 0.3;
+    }
+    ctx.stroke();
+  });
+
+  // Nodes
+  allNodes.forEach(n => {
+    if (!n.visible) return;
+    const isHovered = n === hoveredNode;
+    const isConnected = hoveredNode && adjSet[hoveredNode.id] && adjSet[hoveredNode.id].has(n.id);
+    const dimmed = hoveredNode && !isHovered && !isConnected;
+
+    if (n.kind === 'atom') {
+      // Filled circle for atoms
+      if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius * 3, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.radius * 3);
+        grad.addColorStop(0, n.color + '30');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+      ctx.fillStyle = dimmed ? n.color + '08' : n.color + (isHovered ? 'FF' : 'AA');
+      ctx.fill();
+    } else {
+      // Outlined circle for seeds
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+      if (dimmed) {
+        ctx.strokeStyle = n.color + '08';
+      } else if (isHovered) {
+        ctx.fillStyle = n.color + '40';
+        ctx.fill();
+        ctx.strokeStyle = n.color;
+      } else if (isConnected) {
+        ctx.strokeStyle = n.color + '80';
+      } else {
+        ctx.strokeStyle = n.color + '35';
+      }
+      ctx.lineWidth = isHovered ? 1.5 : 0.8;
+      ctx.stroke();
+    }
+
+    if (isHovered || isConnected) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (dimmed ? '0.05' : '0.8') + ')';
+      ctx.font = (isHovered ? 'bold ' : '') + (10/zoom) + 'px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.label, n.x, n.y - n.radius - 6);
+    }
+  });
+
+  ctx.restore();
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

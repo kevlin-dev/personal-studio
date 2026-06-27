@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09e — AI Field</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F2F2F2;
+    color: #1A1A1A;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+
+  #sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 240px;
+    background: rgba(242,242,242,0.92);
+    backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(0,0,0,0.06);
+    padding: 48px 28px 28px;
+    z-index: 20;
+    display: flex; flex-direction: column;
+  }
+  #sidebar h1 {
+    font-size: 18px; font-weight: 500;
+    letter-spacing: -0.01em; margin-bottom: 32px; color: #1A1A1A;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  }
+  #sidebar h1 span {
+    display: block; font-size: 11px; font-weight: 400;
+    color: #999; letter-spacing: 0.02em; margin-top: 4px;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  #sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+  #sidebar nav a {
+    display: block; padding: 8px 10px; text-decoration: none;
+    color: #999; font-size: 14px; border-radius: 5px;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    transition: color 0.15s ease, background 0.15s ease; cursor: pointer;
+  }
+  #sidebar nav a:hover { color: #fff; background: #1A1A1A; }
+  #sidebar nav a.active { color: #3A3A3A; }
+  #sidebar .footer {
+    margin-top: auto; font-size: 11px; color: #CCC; line-height: 1.6;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+
+  /* Detail panel */
+  #detail {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 320px;
+    background: rgba(255,255,255,0.96); backdrop-filter: blur(16px);
+    border-left: 1px solid rgba(0,0,0,0.06); padding: 48px 32px;
+    z-index: 20; transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow-y: auto;
+  }
+  #detail.open { transform: translateX(0); }
+  #detail h2 { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 6px; color: #1A1A1A; }
+  #detail .meta { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; margin-bottom: 20px; }
+  #detail .claim { font-size: 15px; line-height: 1.65; color: #3A3A3A; margin-bottom: 24px; }
+  #detail .connections { font-size: 12px; color: #888; line-height: 1.8; }
+  #detail .connections span {
+    display: inline-block; padding: 3px 10px; background: rgba(0,0,0,0.04);
+    border-radius: 4px; margin: 2px 4px 2px 0; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #detail .connections span:hover { background: rgba(0,0,0,0.1); color: #1A1A1A; }
+  #detail .close-btn {
+    position: absolute; top: 20px; right: 20px; width: 28px; height: 28px;
+    border: none; background: rgba(0,0,0,0.04); border-radius: 50%; cursor: pointer;
+    font-size: 14px; color: #888; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  #detail .close-btn:hover { background: rgba(0,0,0,0.08); }
+
+  /* Back button */
+  #back-btn {
+    position: fixed; left: 256px; top: 24px;
+    padding: 7px 14px; background: #1A1A1A; color: #fff;
+    border: none; border-radius: 5px; font-size: 12px;
+    font-family: -apple-system, "SF Pro Text", sans-serif;
+    cursor: pointer; z-index: 30; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #back-btn.visible { opacity: 1; pointer-events: auto; }
+
+  /* ── AI Field ────────────────────────────────────────── */
+  #ai-bar {
+    position: fixed;
+    left: 50%; bottom: 36px;
+    transform: translateX(-50%) translateX(120px); /* offset right for sidebar */
+    width: 440px;
+    z-index: 40;
+  }
+
+  #ai-field-wrap {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0,0,0,0.09);
+    border-radius: 10px;
+    padding: 0 16px;
+    height: 48px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.07);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  #ai-field-wrap:focus-within {
+    border-color: rgba(83,89,255,0.35);
+    box-shadow: 0 2px 20px rgba(83,89,255,0.10);
+  }
+
+  #ai-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #5359FF; flex-shrink: 0;
+    transition: transform 0.3s ease;
+  }
+  #ai-dot.thinking {
+    animation: dotPulse 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes dotPulse {
+    from { transform: scale(1); opacity: 0.6; }
+    to   { transform: scale(1.6); opacity: 1; }
+  }
+
+  #ai-input {
+    flex: 1; border: none; background: transparent; outline: none;
+    font-size: 14px; color: #1A1A1A; caret-color: #5359FF;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  #ai-input::placeholder { color: #B0B0B0; }
+
+  #ai-send {
+    width: 28px; height: 28px; flex-shrink: 0;
+    background: transparent; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  #ai-send.visible { opacity: 1; pointer-events: auto; }
+  #ai-send svg { width: 16px; height: 16px; fill: #5359FF; }
+
+  /* Speech bubble — positioned via JS */
+  #speech-bubble {
+    position: fixed; z-index: 50;
+    max-width: 280px;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    font-size: 13px; line-height: 1.55; color: #1A1A1A;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #speech-bubble.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  #speech-bubble .bubble-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: #5359FF; margin-bottom: 6px; font-weight: 500;
+  }
+  /* Tail — points down toward node */
+  #speech-bubble::after {
+    content: "";
+    position: absolute; bottom: -7px; left: 50%;
+    transform: translateX(-50%);
+    width: 12px; height: 7px;
+    background: #fff;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    border-left: 1px solid rgba(0,0,0,0.08);
+    border-right: 1px solid rgba(0,0,0,0.08);
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Kevin Lin <span>Creative Technologist</span></h1>
+  <nav>
+    <a href="#" class="active">Explore</a>
+    <a href="#">Work</a>
+    <a href="#">Writing</a>
+    <a href="#">About</a>
+    <a href="#">Contact</a>
+  </nav>
+  <div class="footer">A living knowledge system.</div>
+</div>
+
+<div id="detail">
+  <button class="close-btn" onclick="closeDetail()">&times;</button>
+  <h2 id="d-title"></h2>
+  <div class="meta" id="d-meta"></div>
+  <div class="claim" id="d-claim"></div>
+  <div class="connections" id="d-conn"></div>
+</div>
+
+<button id="back-btn" onclick="exitDrill()">← All nodes</button>
+
+<canvas id="canvas"></canvas>
+
+<!-- AI Input -->
+<div id="ai-bar">
+  <div id="ai-field-wrap">
+    <div id="ai-dot"></div>
+    <input id="ai-input" type="text" placeholder="Ask anything about Kevin's work…" autocomplete="off" />
+    <button id="ai-send">
+      <svg viewBox="0 0 16 16"><path d="M14.5 8L2 2l2.5 6L2 14z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="speech-bubble">
+  <div class="bubble-label" id="bubble-label"></div>
+  <div id="bubble-text"></div>
+</div>
+
+<script src="atoms-data.js"></script>
+<script>
+(function() {
+  var canvas   = document.getElementById('canvas');
+  var ctx      = canvas.getContext('2d');
+  var detail   = document.getElementById('detail');
+  var backBtn  = document.getElementById('back-btn');
+  var aiInput  = document.getElementById('ai-input');
+  var aiSend   = document.getElementById('ai-send');
+  var aiDot    = document.getElementById('ai-dot');
+  var bubble   = document.getElementById('speech-bubble');
+
+  var W, H, dpr;
+  var hoveredNode    = null;
+  var selectedNode   = null;
+  var dragging       = null;
+  var sidebarW       = 240;
+  var drillMode      = false;
+  var drillTarget    = null;
+  var kevinOpacity   = 1;
+  var kevinTargetOpacity = 1;
+
+  // AI state
+  var aiActive      = false;   // a query is in flight
+  var aiNodeId      = null;    // which node the AI is highlighting
+  var bubbleTimeout = null;
+
+  // ── Fake AI brain ─────────────────────────────────────
+  var aiKnowledge = [
+    {
+      keywords: ["faith", "god", "spirit", "spiritual", "church", "bible", "scripture", "theology"],
+      nodeId: "faith",
+      label: "Faith",
+      response: "Faith isn't a topic Kevin returns to — it's the floor the whole system stands on. Everything else is downstream of this."
+    },
+    {
+      keywords: ["design", "ux", "product", "visual", "interface", "craft", "making"],
+      nodeId: "design",
+      label: "Design",
+      response: "20 years across industrial, software, VR, and AI. The medium shifts. The problem — how do you make something that fits a person — never does."
+    },
+    {
+      keywords: ["ai", "intelligence", "claude", "llm", "machine", "collaborate", "automation"],
+      nodeId: "intelligence",
+      label: "Intelligence",
+      response: "Kevin doesn't use AI as a tool. He treats it as a thinking partner — a second mind that extends what he can hold at once."
+    },
+    {
+      keywords: ["formation", "grow", "growth", "become", "learning", "practice", "discipline"],
+      nodeId: "formation",
+      label: "Formation",
+      response: "Formation is the difference between knowing something and being changed by it. Kevin's entire second brain is built around this distinction."
+    },
+    {
+      keywords: ["story", "narrative", "storytelling", "writing", "pixar", "structure", "arc"],
+      nodeId: "storytelling",
+      label: "Storytelling",
+      response: "Narrative is how meaning holds its shape. Kevin studies story structure not to write better posts — to think more clearly."
+    },
+    {
+      keywords: ["identity", "who", "self", "person", "character", "brand", "positioning"],
+      nodeId: "identity",
+      label: "Identity",
+      response: "The most important design decision isn't visual. It's: who are you building from? Kevin's work starts here."
+    },
+    {
+      keywords: ["knowledge", "atoms", "second brain", "notes", "system", "capture", "compound"],
+      nodeId: "knowledge",
+      label: "Knowledge",
+      response: "122 atoms. 14 domains. A living system for compounding what he learns — not storing it. There's a difference."
+    },
+    {
+      keywords: ["build", "building", "code", "ship", "make", "create", "product"],
+      nodeId: "building",
+      label: "Building",
+      response: "Building is how Kevin learns. Not studying a thing — making it. The act of making reveals what you actually believe."
+    },
+    {
+      keywords: ["father", "baby", "child", "parent", "family", "september"],
+      nodeId: "fatherhood",
+      label: "Fatherhood",
+      response: "A new dimension arriving September 2026. Everything Kevin is building now is partly for this — a world worth handing over."
+    },
+    {
+      keywords: ["paradigm", "shift", "change", "wall", "impossible", "breakthrough", "encounter"],
+      nodeId: "paradigm",
+      label: "Paradigm Shifts",
+      response: "The walls that only dissolve through encounter — not argument. This is where Kevin's formation theory gets interesting."
+    },
+    {
+      keywords: ["perception", "see", "seeing", "lens", "perspective", "vision", "attention"],
+      nodeId: "perception",
+      label: "Perception",
+      response: "How we see determines what we see. Kevin's entire work is about training better perception — in design, in faith, in life."
+    },
+  ];
+
+  var fallbackResponses = [
+    "That's somewhere in the graph. Try asking about faith, design, building, or formation.",
+    "Good question. The node that comes closest is probably formation — everything connects there.",
+    "Kevin's system doesn't have a clean answer for that yet. Which is usually where the interesting atoms live.",
+  ];
+  var fallbackIdx = 0;
+
+  function matchQuery(text) {
+    var lower = text.toLowerCase();
+    for (var i = 0; i < aiKnowledge.length; i++) {
+      var entry = aiKnowledge[i];
+      for (var j = 0; j < entry.keywords.length; j++) {
+        if (lower.indexOf(entry.keywords[j]) !== -1) return entry;
+      }
+    }
+    return null;
+  }
+  // ────────────────────────────────────────────────────────
+
+  var surfaceNodes = [
+    { id: "design",       label: "Design",          shape: "circle",   desc: "20 years across industrial, software, VR, and AI",            atoms: [56, 57, 58, 109, 110] },
+    { id: "faith",        label: "Faith",            shape: "triangle", desc: "The foundation everything rests on",                         atoms: [35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 101, 102, 103] },
+    { id: "intelligence", label: "Intelligence",     shape: "diamond",  desc: "Human-AI collaboration as a new dimension",                  atoms: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16] },
+    { id: "formation",    label: "Formation",        shape: "pentagon", desc: "How people grow — not what they know, but what they become", atoms: [49, 50, 51, 52, 53, 54, 55, 59, 60, 61] },
+    { id: "storytelling", label: "Storytelling",     shape: "hexagon",  desc: "Narrative as the structure of meaning",                     atoms: [26, 27, 28, 29, 30, 31, 32, 107, 108] },
+    { id: "identity",     label: "Identity",         shape: "square",   desc: "Who you are shapes what you build",                         atoms: [33, 34, 35, 62, 63, 64, 65, 66] },
+    { id: "knowledge",    label: "Knowledge",        shape: "circle",   desc: "Systems for capturing and compounding what you learn",       atoms: [1, 2, 3, 4, 5, 6, 67, 68, 69, 70] },
+    { id: "perception",   label: "Perception",       shape: "triangle", desc: "How we see determines what we see",                         atoms: [56, 57, 58, 109] },
+    { id: "building",     label: "Building",         shape: "diamond",  desc: "The act of making as a way of knowing",                     atoms: [17, 18, 19, 20, 21, 22, 23, 24, 25] },
+    { id: "scripture",    label: "Scripture",        shape: "hexagon",  desc: "Living words that read the reader",                         atoms: [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 101, 102, 103] },
+    { id: "fatherhood",   label: "Fatherhood",       shape: "square",   desc: "A new dimension arriving September 2026",                   atoms: [] },
+    { id: "paradigm",     label: "Paradigm Shifts",  shape: "pentagon", desc: "The walls that dissolve only through encounter",            atoms: [49, 50, 71, 72, 73] },
+  ];
+
+  var surfaceEdges = [
+    { s: "design",       t: "perception" },
+    { s: "design",       t: "building" },
+    { s: "faith",        t: "scripture" },
+    { s: "faith",        t: "formation" },
+    { s: "faith",        t: "identity" },
+    { s: "intelligence", t: "building" },
+    { s: "intelligence", t: "knowledge" },
+    { s: "formation",    t: "identity" },
+    { s: "formation",    t: "paradigm" },
+    { s: "storytelling", t: "identity" },
+    { s: "storytelling", t: "perception" },
+    { s: "knowledge",    t: "formation" },
+    { s: "perception",   t: "paradigm" },
+    { s: "building",     t: "paradigm" },
+    { s: "fatherhood",   t: "formation" },
+    { s: "fatherhood",   t: "faith" },
+    { s: "scripture",    t: "formation" },
+  ];
+
+  var adj = {};
+  surfaceNodes.forEach(function(n) { adj[n.id] = {}; });
+  surfaceEdges.forEach(function(e) {
+    adj[e.s][e.t] = true;
+    adj[e.t][e.s] = true;
+  });
+
+  var nodes = [];
+  var nodeById = {};
+
+  var kevinNode = { id: "kevin", isCenter: true, x: 0, y: 0, size: 20 };
+
+  function initNodes() {
+    nodes = []; nodeById = {};
+    var cx = sidebarW + (W - sidebarW) / 2;
+    var cy = H / 2;
+    kevinNode.x = cx; kevinNode.y = cy;
+    var spreadR = Math.min(W - sidebarW, H) * 0.28;
+    surfaceNodes.forEach(function(sn, i) {
+      var angle = (i / surfaceNodes.length) * Math.PI * 2 - Math.PI / 2;
+      var r = spreadR * (0.7 + Math.random() * 0.3);
+      var n = {
+        id: sn.id, label: sn.label, shape: sn.shape, desc: sn.desc, atoms: sn.atoms,
+        x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+        vx: 0, vy: 0, size: 16, opacity: 1, targetOpacity: 1,
+        drillScale: 1, targetDrillScale: 1,
+      };
+      nodes.push(n); nodeById[sn.id] = n;
+    });
+  }
+
+  function drawShape(x, y, size, shape, fill, stroke, lineW) {
+    ctx.beginPath();
+    var s = size;
+    switch(shape) {
+      case "circle":   ctx.arc(x, y, s, 0, Math.PI*2); break;
+      case "triangle":
+        ctx.moveTo(x, y - s*1.1); ctx.lineTo(x+s, y+s*0.7); ctx.lineTo(x-s, y+s*0.7); ctx.closePath(); break;
+      case "square":
+        var h = s*0.85; ctx.rect(x-h, y-h, h*2, h*2); break;
+      case "diamond":
+        ctx.moveTo(x, y-s*1.15); ctx.lineTo(x+s*0.85, y); ctx.lineTo(x, y+s*1.15); ctx.lineTo(x-s*0.85, y); ctx.closePath(); break;
+      case "pentagon":
+        for(var i=0;i<5;i++){var a=(i/5)*Math.PI*2-Math.PI/2;ctx.lineTo(x+Math.cos(a)*s,y+Math.sin(a)*s);}ctx.closePath();break;
+      case "hexagon":
+        for(var i=0;i<6;i++){var a=(i/6)*Math.PI*2;ctx.lineTo(x+Math.cos(a)*s,y+Math.sin(a)*s);}ctx.closePath();break;
+    }
+    if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineW||1.5; ctx.stroke(); }
+  }
+
+  function hitTest(x, y, n) {
+    var dx=x-n.x, dy=y-n.y; return Math.sqrt(dx*dx+dy*dy)<n.size+14;
+  }
+
+  function setup() {
+    dpr = window.devicePixelRatio||1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    canvas.style.width = W+"px"; canvas.style.height = H+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if (nodes.length === 0) initNodes();
+    else { kevinNode.x = sidebarW+(W-sidebarW)/2; kevinNode.y = H/2; }
+  }
+  setup();
+  window.addEventListener("resize", function(){ setup(); });
+
+  function simulate() {
+    var cx = sidebarW+(W-sidebarW)/2, cy = H/2;
+    for(var i=0;i<nodes.length;i++){
+      for(var j=i+1;j<nodes.length;j++){
+        var a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<1)d=1; if(d>400)continue;
+        var f=1200/(d*d); a.vx+=(dx/d)*f;a.vy+=(dy/d)*f;b.vx-=(dx/d)*f;b.vy-=(dy/d)*f;
+      }
+    }
+    surfaceEdges.forEach(function(e){
+      var a=nodeById[e.s],b=nodeById[e.t]; if(!a||!b)return;
+      var dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy); if(d<1)d=1;
+      var f=(d-160)*0.002; a.vx+=(dx/d)*f;a.vy+=(dy/d)*f;b.vx-=(dx/d)*f;b.vy-=(dy/d)*f;
+    });
+    nodes.forEach(function(n){
+      n.vx+=(cx-n.x)*0.0003; n.vy+=(cy-n.y)*0.0003;
+      if(n.x<sidebarW+60)n.vx+=0.5; if(n.x>W-60)n.vx-=0.5;
+      if(n.y<60)n.vy+=0.5; if(n.y>H-60)n.vy-=0.5;
+      var driftT=Date.now()*0.0004,idx=nodes.indexOf(n);
+      n.vx+=Math.sin(driftT+idx*2.3)*0.0015; n.vy+=Math.cos(driftT*0.7+idx*1.7)*0.0015;
+      n.vx*=0.92; n.vy*=0.92;
+      if(n!==dragging){n.x+=n.vx;n.y+=n.vy;}
+      n.opacity+=(n.targetOpacity-n.opacity)*0.08;
+      n.drillScale+=(n.targetDrillScale-n.drillScale)*0.08;
+    });
+    kevinOpacity+=(kevinTargetOpacity-kevinOpacity)*0.08;
+  }
+
+  function positionBubble(nodeId) {
+    var n = nodeById[nodeId];
+    if (!n) return;
+    // Place bubble above the node
+    var bw = 280;
+    var bx = n.x - bw/2;
+    var by = n.y - n.size - 80; // above node
+
+    // Keep within viewport
+    if (bx < sidebarW + 16) bx = sidebarW + 16;
+    if (bx + bw > W - 16)   bx = W - bw - 16;
+    if (by < 16)             by = n.y + n.size + 20; // flip below if too high
+
+    bubble.style.left   = bx + "px";
+    bubble.style.top    = by + "px";
+    bubble.style.width  = bw + "px";
+  }
+
+  function showBubble(nodeId, label, text) {
+    document.getElementById("bubble-label").textContent = label;
+    document.getElementById("bubble-text").textContent  = text;
+    positionBubble(nodeId);
+    bubble.classList.add("visible");
+  }
+
+  function hideBubble() {
+    bubble.classList.remove("visible");
+    aiNodeId = null;
+  }
+
+  // AI query handler
+  function handleQuery(text) {
+    if (!text.trim()) return;
+    aiDot.classList.add("thinking");
+    aiInput.disabled = true;
+    aiActive = true;
+
+    // Simulate brief "thinking" delay
+    setTimeout(function() {
+      aiDot.classList.remove("thinking");
+      aiInput.disabled = false;
+      aiInput.value = "";
+      aiSend.classList.remove("visible");
+      aiActive = false;
+
+      var match = matchQuery(text);
+
+      if (match) {
+        aiNodeId = match.nodeId;
+        // Isolate matched node in graph
+        hoveredNode = nodeById[match.nodeId] || null;
+        showBubble(match.nodeId, match.label, match.response);
+      } else {
+        // Fallback — no node isolation
+        hoveredNode = null;
+        var resp = fallbackResponses[fallbackIdx % fallbackResponses.length];
+        fallbackIdx++;
+        document.getElementById("bubble-label").textContent = "Hmm";
+        document.getElementById("bubble-text").textContent  = resp;
+        bubble.style.left  = (sidebarW + (W - sidebarW)/2 - 140) + "px";
+        bubble.style.top   = (H/2 - 120) + "px";
+        bubble.style.width = "280px";
+        bubble.classList.add("visible");
+      }
+
+      // Auto-dismiss after 5s
+      clearTimeout(bubbleTimeout);
+      bubbleTimeout = setTimeout(function() {
+        hideBubble();
+        if (!drillMode) hoveredNode = null;
+      }, 5000);
+
+    }, 700); // 700ms fake latency
+  }
+
+  // Input events
+  aiInput.addEventListener("input", function() {
+    if (aiInput.value.trim().length > 0) {
+      aiSend.classList.add("visible");
+    } else {
+      aiSend.classList.remove("visible");
+    }
+  });
+
+  aiInput.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !aiActive) {
+      handleQuery(aiInput.value);
+    }
+    if (e.key === "Escape") {
+      hideBubble();
+      hoveredNode = null;
+      aiInput.value = "";
+      aiSend.classList.remove("visible");
+    }
+  });
+
+  aiSend.addEventListener("click", function() {
+    if (!aiActive) handleQuery(aiInput.value);
+  });
+
+  // Draw loop
+  function draw() {
+    simulate();
+    ctx.clearRect(0, 0, W, H);
+    var time = Date.now();
+
+    // Opacity targets
+    if (drillMode) {
+      kevinTargetOpacity = 0;
+      nodes.forEach(function(n){
+        var isTarget=(n.id===drillTarget), isConn=adj[drillTarget]&&adj[drillTarget][n.id];
+        n.targetOpacity=( isTarget||isConn)?1:0;
+        n.targetDrillScale=1;
+      });
+    } else if (aiNodeId && nodeById[aiNodeId]) {
+      // AI highlight: treat matched node like a hover
+      var aiN = nodeById[aiNodeId];
+      kevinTargetOpacity = 0.25;
+      nodes.forEach(function(n){
+        var isMatch=(n===aiN), isConn=adj[aiN.id]&&adj[aiN.id][n.id];
+        n.targetOpacity=(isMatch||isConn)?1:0.06;
+        n.targetDrillScale=1;
+      });
+    } else if (hoveredNode) {
+      kevinTargetOpacity = 0.25;
+      nodes.forEach(function(n){
+        var isHov=(n===hoveredNode), isConn=adj[hoveredNode.id]&&adj[hoveredNode.id][n.id];
+        n.targetOpacity=(isHov||isConn)?1:0.06;
+        n.targetDrillScale=1;
+      });
+    } else {
+      kevinTargetOpacity = 1;
+      nodes.forEach(function(n){ n.targetOpacity=1; n.targetDrillScale=1; });
+    }
+
+    // Kevin → node edges
+    nodes.forEach(function(n){
+      if(n.opacity<0.02||kevinOpacity<0.02)return;
+      var alpha=Math.min(n.opacity,kevinOpacity)*0.12;
+      var breathFreq = aiActive ? 0.004 : 0.0007; // quickens when thinking
+      var kevinBreath = kevinNode.size + Math.sin(time*breathFreq)*2;
+      var dx=n.x-kevinNode.x, dy=n.y-kevinNode.y, d=Math.sqrt(dx*dx+dy*dy);
+      if(d<1)return;
+      var ux=dx/d, uy=dy/d;
+      ctx.beginPath();
+      ctx.moveTo(kevinNode.x+ux*(kevinBreath+2), kevinNode.y+uy*(kevinBreath+2));
+      ctx.lineTo(n.x-ux*(n.size*n.drillScale+2), n.y-uy*(n.size*n.drillScale+2));
+      ctx.strokeStyle="rgba(40,40,40,"+alpha+")";
+      ctx.lineWidth=0.5; ctx.stroke();
+    });
+
+    // Node-to-node edges
+    surfaceEdges.forEach(function(e){
+      var a=nodeById[e.s],b=nodeById[e.t]; if(!a||!b)return;
+      var minOp=Math.min(a.opacity,b.opacity); if(minOp<0.02)return;
+      var isHov=hoveredNode&&(a===hoveredNode||b===hoveredNode);
+      var isAI=aiNodeId&&(a.id===aiNodeId||b.id===aiNodeId);
+      var dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy); if(d<1)return;
+      var ux=dx/d, uy=dy/d;
+      ctx.beginPath();
+      ctx.moveTo(a.x+ux*(a.size*a.drillScale+2), a.y+uy*(a.size*a.drillScale+2));
+      ctx.lineTo(b.x-ux*(b.size*b.drillScale+2), b.y-uy*(b.size*b.drillScale+2));
+      if(isHov||isAI){ ctx.strokeStyle="rgba(40,40,40,"+(0.22*minOp)+")"; ctx.lineWidth=1; }
+      else           { ctx.strokeStyle="rgba(40,40,40,"+(0.07*minOp)+")"; ctx.lineWidth=0.5; }
+      ctx.stroke();
+    });
+
+    // Kevin node
+    if(kevinOpacity>0.01){
+      var breathFreq = aiActive ? 0.004 : 0.0007;
+      var kevinBreath = kevinNode.size + Math.sin(time*breathFreq)*2.5;
+      ctx.globalAlpha=kevinOpacity;
+      // Halo
+      var g=ctx.createRadialGradient(kevinNode.x,kevinNode.y,kevinBreath*0.5,kevinNode.x,kevinNode.y,kevinBreath*2.2);
+      g.addColorStop(0,"rgba(83,89,255,0.10)"); g.addColorStop(1,"rgba(83,89,255,0)");
+      ctx.beginPath(); ctx.arc(kevinNode.x,kevinNode.y,kevinBreath*2.2,0,Math.PI*2);
+      ctx.fillStyle=g; ctx.fill();
+      // Core
+      ctx.beginPath(); ctx.arc(kevinNode.x,kevinNode.y,kevinBreath,0,Math.PI*2);
+      ctx.fillStyle="#5359FF"; ctx.fill();
+      // Label
+      ctx.fillStyle="rgba(26,26,26,"+kevinOpacity+")";
+      ctx.font="12px -apple-system, sans-serif"; ctx.textAlign="center";
+      ctx.fillText("Kevin Lin",kevinNode.x,kevinNode.y+kevinBreath+20);
+      ctx.globalAlpha=1;
+    }
+
+    // Content nodes
+    nodes.forEach(function(n){
+      if(n.opacity<0.01)return;
+      var isHov=(n===hoveredNode);
+      var isSel=(selectedNode&&n.id===selectedNode)||(drillMode&&n.id===drillTarget);
+      var isAIMatch=(n.id===aiNodeId);
+      var s=n.size*n.drillScale;
+      s+=Math.sin(time*0.0006+nodes.indexOf(n)*0.7)*0.4;
+      if(isHov)s*=1.18;
+      ctx.globalAlpha=n.opacity;
+      var fill, stroke, lineW;
+      if(isHov||isSel||isAIMatch){ fill="#1A1A1A"; stroke=null; lineW=0; }
+      else { fill="rgba(60,60,58,0.06)"; stroke="#8A8A88"; lineW=1.5; }
+      drawShape(n.x,n.y,s,n.shape,fill,stroke,lineW);
+      ctx.font="13px -apple-system, sans-serif"; ctx.textAlign="center";
+      if(isHov||isSel||isAIMatch){
+        ctx.fillStyle="#1A1A1A";
+        ctx.font="600 13px -apple-system, sans-serif";
+      } else {
+        ctx.fillStyle="rgba(102,102,102,"+n.opacity+")";
+      }
+      ctx.fillText(n.label,n.x,n.y+s+22);
+      if(isHov){
+        ctx.fillStyle="#999"; ctx.font="11px -apple-system, sans-serif";
+        ctx.fillText(n.desc,n.x,n.y+s+38);
+      }
+      ctx.globalAlpha=1;
+    });
+
+    // Re-position bubble if visible (node moves with simulation)
+    if(bubble.classList.contains("visible") && aiNodeId) {
+      positionBubble(aiNodeId);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  // Mouse events
+  canvas.addEventListener("mousedown", function(e){
+    var best=null;
+    nodes.forEach(function(n){ if(hitTest(e.clientX,e.clientY,n))best=n; });
+    if(best){ dragging=best; dragging._clickX=e.clientX; dragging._clickY=e.clientY; }
+  });
+
+  canvas.addEventListener("mousemove", function(e){
+    if(dragging){ dragging.x=e.clientX; dragging.y=e.clientY; dragging.vx=0; dragging.vy=0; }
+    if(!aiNodeId) {
+      var best=null;
+      nodes.forEach(function(n){ if(hitTest(e.clientX,e.clientY,n))best=n; });
+      hoveredNode=best;
+    }
+    canvas.style.cursor=(hoveredNode||aiNodeId)?"pointer":"default";
+  });
+
+  canvas.addEventListener("mouseup", function(e){
+    if(dragging){
+      var dx=e.clientX-(dragging._clickX||0), dy=e.clientY-(dragging._clickY||0);
+      if(Math.sqrt(dx*dx+dy*dy)<5){
+        drillMode=true; drillTarget=dragging.id; selectedNode=dragging.id;
+        backBtn.classList.add("visible");
+        showDetail(dragging);
+        hideBubble();
+      }
+      dragging=null;
+    }
+  });
+
+  canvas.addEventListener("click", function(e){
+    if(!hoveredNode&&!dragging&&!drillMode){
+      closeDetail(); hideBubble(); hoveredNode=null;
+    }
+  });
+
+  window.closeDetail = function(){
+    selectedNode=null; detail.classList.remove("open");
+  };
+
+  window.exitDrill = function(){
+    drillMode=false; drillTarget=null; selectedNode=null;
+    backBtn.classList.remove("visible"); detail.classList.remove("open");
+  };
+
+  function showDetail(n){
+    document.getElementById("d-title").textContent=n.label;
+    document.getElementById("d-meta").textContent=n.atoms.length+" ideas";
+    document.getElementById("d-claim").textContent=n.desc;
+    var connHtml="<div style='margin-top:8px;font-size:11px;color:#AAA;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;'>Connected to</div>";
+    Object.keys(adj[n.id]||{}).forEach(function(cid){
+      var cn=nodeById[cid];
+      if(cn)connHtml+="<span onclick='selectNode(\""+cid+"\")'>" +cn.label+"</span>";
+    });
+    document.getElementById("d-conn").innerHTML=connHtml;
+    if(n.atoms.length>0&&typeof atoms!=="undefined"){
+      var aHtml="<div style='margin-top:24px;font-size:11px;color:#AAA;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;'>Ideas</div>";
+      n.atoms.slice(0,5).forEach(function(aid){
+        var atom=atoms.find(function(a){return a.id===aid;});
+        if(atom)aHtml+="<div style='margin-bottom:10px;'><div style='font-size:13px;color:#3A3A3A;'>"+atom.title+"</div><div style='font-size:12px;color:#888;margin-top:2px;'>"+atom.claim+"</div></div>";
+      });
+      document.getElementById("d-conn").innerHTML+=aHtml;
+    }
+    detail.classList.add("open");
+  }
+
+  window.selectNode = function(id){
+    var n=nodeById[id];
+    if(n){ drillMode=true; drillTarget=id; selectedNode=id; backBtn.classList.add("visible"); showDetail(n); }
+  };
+
+  draw();
+})();
+</script>
+</body>
+</html>
